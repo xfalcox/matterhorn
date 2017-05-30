@@ -1,4 +1,6 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Events where
 
 import           Prelude ()
@@ -13,9 +15,11 @@ import           Lens.Micro.Platform
 
 import           Network.Mattermost
 import           Network.Mattermost.Lenses
+import           Network.Mattermost.Version (mmApiVersion)
 import           Network.Mattermost.WebSocket
 
 import           Connection
+import           Options (mhVersion)
 import           State
 import           State.Common
 import           Types
@@ -143,11 +147,14 @@ handleWSEvent we = do
     -- Right now, we don't use any server preferences in
     -- our client, but that might change
     WMPreferenceChanged -> return ()
-    -- This happens whenever a user connects to the server
-    -- I think all the information we need (about being
-    -- online or away or what-have-you) gets represented
-    -- in StatusChanged messages, so we can ignore it.
-    WMHello -> return ()
+    -- | This happens whenever a user connects to the server Most of
+    -- the information we need (about being online or away or
+    -- what-have-you) gets represented in StatusChanged messages, so
+    -- this is mostly used for initial version validation and
+    -- otherwise is ignored.
+    WMHello -> case wepServerVersion (weData we) of
+                 Just s -> checkVersion s
+                 Nothing -> return () -- no version supplied by server
     -- right now we don't show typing notifications. maybe
     -- we should? i dunno.
     WMTyping -> return ()
@@ -166,3 +173,74 @@ handleWSEvent we = do
     WMAddedToTeam -> return () -- XXX: we need to handle this
     WMWebRTC      -> return ()
     WMAuthenticationChallenge -> return ()
+
+-- | Check the server version and create a warning message if it
+-- doesn't match the current matterhorn/mattermost-api version.
+--
+-- Ideal World Scenario:
+--
+--   An un-authenticated message could be sent to the server by the
+--   client, and the server would respond with a JSON message
+--   providing explicit API version compatibility.  Oh, and also that
+--   the API was fully documented and version compatibility was
+--   actually tracked and indicated.
+--
+-- Actual Scenario:
+--
+-- The version check is a largely optimistic but ultimately unreliable
+-- operation that uses undocumented server side-effects to provide a
+-- hint that a version incompatibility might exist and be a problem.
+-- Some assumptions involved:
+--
+--   (a) the server has generated a hello message
+--
+--   (b) the message includes the server version
+--
+--   (c) the format of the server_version is as expected.
+--
+--   (d) the hello message occurs early enough that the message can be
+--       shown before any API mismatch causes an abrupt exit from
+--       matterhorn.
+--
+-- None of the first three assumptions is documented (except a passing
+-- reference to the presence of the message).  For the last
+-- assumption, there is potentially a lot of client/server interaction
+-- that has already occurred even if the hello message is received.
+-- And furthermore, overall there is no guarantee that a version
+-- mismatch will or won't work, so a message is printed but matterhorn
+-- will continue to run.
+--
+-- The server version format is (according to the Mattermost source
+-- code platform/app/web_conn.go {SendHello()} as of 2017 May 30:
+--
+--   CurrentVersion.BuildNumber.ClientCfgHash.IsLicensed
+--
+-- However, there is no normalization of the fields, which may
+-- themselves contain periods, so practically speaking the
+-- server_version is likely to look like:
+--
+--   3.8.0.3.8.2.0933127a78dcc2ef120cbb6d9fe59ec3.true
+--
+-- The BuildNumber is the important part from the perspective of
+-- Matterhorn.  Parsing assumes that neither ClientCfgHash nor
+-- IsLicensed contains periods, and that the BuildNumber is always 3
+-- fields.  The parsing would extrace the "3.8.2" from the above and
+-- convert it to "30802" for comparison to the Matterhorn version.
+
+checkVersion :: T.Text -> MH ()
+checkVersion s =
+    let vparts = reverse $ take 3 $ drop 2 $ reverse $ T.splitOn "." s
+        mindigits n v = if T.length v < n then (mindigits n $ "0" <> v) else v
+        svers = T.concat $ head vparts : (map (mindigits 2) $ tail vparts)
+        mainVerOf = fst . break (== '.') . tail . snd . break (== ' ')
+        mhVersion1 = mainVerOf mhVersion
+        mmApiVersion1 = mainVerOf mmApiVersion
+    in if mhVersion1 == mmApiVersion1 && svers == T.pack mhVersion1
+       then return ()
+       else postErrorMessage $ "WARNING: Version mismatch (malfunctions likely)!"
+                               <> "  Matterhorn=" <> T.pack mhVersion1
+                               <> " (" <> T.pack mhVersion <> ")"
+                               <> "  Mattermost-api=" <> T.pack mmApiVersion1
+                               <> " (" <> T.pack mmApiVersion <> ")"
+                               <> "  Mattermost server=" <> svers
+                               <> " (" <> s <> ")"
