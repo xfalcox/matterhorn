@@ -12,7 +12,6 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Exception (try)
 import           Control.Monad (forever, void, when)
 import           Data.Monoid ((<>))
-import           Data.Maybe (isNothing)
 import qualified Graphics.Vty as Vty
 import           Lens.Micro.Platform
 import           System.Exit (exitFailure)
@@ -42,10 +41,16 @@ main = do
 
   requestChan <- STM.atomically STM.newTChan
   void $ forkIO $ forever $ do
-    chk <- STM.atomically $ STM.tryPeekTChan requestChan
-    when (isNothing chk) $ writeBChan eventChan BGIdle
+    chk <- STM.atomically $ do
+              chanCopy <- STM.cloneTChan requestChan
+              let cntMsgs = do m <- STM.tryReadTChan chanCopy
+                               case m of
+                                 Nothing -> return 0
+                                 Just _ -> (1 +) <$> cntMsgs
+              cntMsgs
+    writeBChan eventChan $ if chk == 0 then BGIdle else BGBusy chk
     req <- STM.atomically $ STM.readTChan requestChan
-    when (isNothing chk) $ writeBChan eventChan BGBusy
+    when (chk == 0) $ writeBChan eventChan $ BGBusy 1
     res <- try req
     case res of
       Left e    -> writeBChan eventChan (AsyncErrEvent e)

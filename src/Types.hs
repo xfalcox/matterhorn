@@ -314,7 +314,7 @@ data ChatState = ChatState
   , _csRecentChannel               :: Maybe ChannelId
   , _csUrlList                     :: List Name LinkChoice
   , _csConnectionStatus            :: ConnectionStatus
-  , _csWorkerIsBusy                :: Bool
+  , _csWorkerIsBusy                :: Maybe Int
   , _csJoinChannelList             :: Maybe (List Name Channel)
   , _csMessageSelect               :: MessageSelectState
   }
@@ -406,8 +406,8 @@ data MHEvent
     -- ^ Tell our main loop to refresh the websocket connection
   | WebsocketDisconnect
   | WebsocketConnect
-  | BGIdle  -- ^ background worker is idle
-  | BGBusy  -- ^ background worker is busy
+  | BGIdle      -- ^ background worker is idle
+  | BGBusy Int  -- ^ background worker is busy with n requests
 
 -- ** Application State Lenses
 
