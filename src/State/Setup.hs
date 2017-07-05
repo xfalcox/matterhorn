@@ -175,6 +175,7 @@ newState rs i u m tz hist sp resetTimer = ChatState
   , _csRecentChannel               = Nothing
   , _csUrlList                     = list UrlList mempty 2
   , _csConnectionStatus            = Connected
+  , _csWorkerIsBusy                = False
   , _csJoinChannelList             = Nothing
   , _csMessageSelect               = MessageSelectState Nothing
   }

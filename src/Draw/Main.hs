@@ -630,7 +630,9 @@ mainInterface st =
         MessageSelect -> messageSelectBottomBar st
         _ -> case st^.csCurrentCompletion of
             Just _ | length (st^.csEditState.cedCompletionAlternatives) > 1 -> completionAlternatives st
-            _ -> maybeSubdue $ hLimit channelListWidth hBorder <+> borderElem bsIntersectB <+> hBorder
+            _ -> maybeSubdue $ hLimit channelListWidth hBorder <+> borderElem bsIntersectB <+> hBorder <+> showBusy
+
+    showBusy = if st^.csWorkerIsBusy then txt "*" else emptyWidget
 
     maybeSubdue = if st^.csMode == ChannelSelect
                   then forceAttr ""

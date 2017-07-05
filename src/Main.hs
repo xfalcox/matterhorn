@@ -10,8 +10,9 @@ import           Brick.BChan
 import           Control.Concurrent (forkIO)
 import qualified Control.Concurrent.STM as STM
 import           Control.Exception (try)
-import           Control.Monad (forever, void)
+import           Control.Monad (forever, void, when)
 import           Data.Monoid ((<>))
+import           Data.Maybe (isNothing)
 import qualified Graphics.Vty as Vty
 import           Lens.Micro.Platform
 import           System.Exit (exitFailure)
@@ -41,7 +42,10 @@ main = do
 
   requestChan <- STM.atomically STM.newTChan
   void $ forkIO $ forever $ do
+    chk <- STM.atomically $ STM.tryPeekTChan requestChan
+    when (isNothing chk) $ writeBChan eventChan BGIdle
     req <- STM.atomically $ STM.readTChan requestChan
+    when (isNothing chk) $ writeBChan eventChan BGBusy
     res <- try req
     case res of
       Left e    -> writeBChan eventChan (AsyncErrEvent e)
