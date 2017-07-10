@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Types where
 
@@ -27,9 +28,12 @@ import           Data.Time.Clock (UTCTime, getCurrentTime)
 import           Data.Time.LocalTime (TimeZone)
 import qualified Data.HashMap.Strict as HM
 import           Data.List (partition, sortBy)
+import qualified Data.List as L
 import           Data.Maybe
 import           Data.Monoid
 import qualified Graphics.Vty as Vty
+import qualified Language.Haskell.TH as TH
+import qualified Language.Haskell.TH.Quote as THQ
 import           Lens.Micro.Platform ( at, makeLenses, lens, (&), (^.), (%~), (.~), (^?!)
                                      , to, SimpleGetter, _Just
                                      , Traversal', preuse )
@@ -537,6 +541,60 @@ data Keybinding =
        , kbEvent :: Vty.Event
        , kbAction :: MH ()
        }
+
+-- | Specify $(keyspec "K description") where K is a key name, with
+-- optional "C-" or "M-" prefixes (or both) specifying the Control or
+-- Meta keys: the result is a function that takes an operation and
+-- returns a Keybinding. For example:
+--
+-- > $(keyspec "C-r Reload the configuration") reloadConf ==
+-- > KB { kbDescription = "Reload the configuration"
+-- >    , kbEvent = Vty.EvKey (Vty.KChar 'r') [Vty.MCtrl]
+-- >    , kbAction = reloadConf
+--
+-- See also the 'key' quasiquoter.
+keySpec :: String -> TH.Q TH.Exp
+keySpec keyref = do
+  let chkCtrl s = if "C-" `L.isPrefixOf` s then (L.drop 2 s, True) else (s, False)
+      chkMeta s = if "M-" `L.isPrefixOf` s then (L.drop 2 s, True) else (s, False)
+      isSpace = flip L.elem (" \t" :: String)
+      isDigit = flip L.elem ("0123456789" :: String)
+      (keyspec, keydesc) = fmap (L.dropWhile isSpace) $ L.break isSpace keyref
+      (s1, c1) = chkCtrl keyspec
+      (s2, m1) = chkMeta s1
+      (s3, c2) = if c1 then (s2, c1) else chkCtrl s2
+      (s4, m2) = if m1 then (s3, m1) else chkMeta s3
+      keyHead = L.head s4
+      keyChar = TH.appE (TH.conE 'Vty.KChar) (TH.litE $ TH.charL keyHead)
+      keySpace = TH.appE (TH.conE 'Vty.KChar) (TH.litE $ TH.charL ' ')
+      keyTab = TH.appE (TH.conE 'Vty.KChar) (TH.litE $ TH.charL '\t')
+      keyDigits = case L.break (not . isDigit) $ L.drop 1 s4 of
+                    (d, "") -> (True, read d)
+                    _ -> (False, 0 :: Integer)
+      keyFunc = TH.appE (TH.conE 'Vty.KFun) (TH.litE $ TH.integerL $ snd keyDigits)
+      keyMods = TH.listE ([TH.conE 'Vty.MCtrl | c2] ++ [TH.conE 'Vty.MMeta | m2])
+      keyPlain | length s4 == 1 = keyChar
+               | s4 == "Space"  = keySpace
+               | s4 == "Tab"    = keyTab
+               | keyHead == 'F' && fst keyDigits = keyFunc
+               | otherwise      = error $ "Invalid key specification: " <> s4
+  keys <- TH.lookupValueName ("Vty.K" ++ s4) >>= return . maybe keyPlain TH.conE
+  [e| \op -> KB { kbEvent = (Vty.EvKey $(keys) $(keyMods))
+                , kbDescription = keydesc
+                , kbAction = op
+                } |]
+
+-- | Defines a quasiquoter to generate Keybindings when a trailing
+-- operation is specified:
+--
+-- > [key| C-b move backwards|] moveBack
+key :: THQ.QuasiQuoter
+key = THQ.QuasiQuoter {
+        THQ.quoteExp = keySpec
+      , THQ.quotePat = error "key quasiquoter does not handle patterns"
+      , THQ.quoteType = error "key quasiquoter does not handle types"
+      , THQ.quoteDec = error "key quasiquoter does not handle declarations"
+      }
 
 -- | Find a keybinding that matches a Vty Event
 lookupKeybinding :: Vty.Event -> [Keybinding] -> Maybe Keybinding

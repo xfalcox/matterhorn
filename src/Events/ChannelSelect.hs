@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Events.ChannelSelect where
 
 import Prelude ()
@@ -25,8 +27,7 @@ onEventChannelSelect _ = return ()
 
 channelSelectKeybindings :: [Keybinding]
 channelSelectKeybindings =
-    [ KB "Select matching channel"
-         (Vty.EvKey Vty.KEnter []) $ do
+    [ [key|Enter Select matching channel|] $ do
              -- If there is only one channel selection match, switch to
              -- it
              st <- use id
@@ -43,11 +44,6 @@ channelSelectKeybindings =
                      changeChannel (channelNameFromMatch exact)
                  _ -> return ()
 
-    , KB "Cancel channel selection"
-         (Vty.EvKey Vty.KEsc []) $ do
-           csMode .= Main
-
-    , KB "Cancel channel selection"
-         (Vty.EvKey (Vty.KChar 'c') [Vty.MCtrl]) $ do
-           csMode .= Main
+    , [key|Esc Cancel channel selection|] (csMode .= Main)
+    , [key|C-c Cancel channel selection|] (csMode .= Main)
     ]

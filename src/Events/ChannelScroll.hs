@@ -1,3 +1,6 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE QuasiQuotes #-}
+
 module Events.ChannelScroll where
 
 import Prelude ()
@@ -12,23 +15,13 @@ import State
 
 channelScrollKeybindings :: [Keybinding]
 channelScrollKeybindings =
-  [ KB "Load more messages in the current channel"
-    (Vty.EvKey (Vty.KChar 'b') [Vty.MCtrl])
-    loadMoreMessages
-  , KB "Select and open a URL posted to the current channel"
-    (Vty.EvKey (Vty.KChar 'o') [Vty.MCtrl])
-    startUrlSelect
-  , KB "Scroll up" (Vty.EvKey Vty.KPageUp [])
-    channelPageUp
-  , KB "Scroll down" (Vty.EvKey Vty.KPageDown [])
-    channelPageDown
-  , KB "Cancel scrolling and return to channel view"
-    (Vty.EvKey Vty.KEsc []) $
-    csMode .= Main
-  , KB "Scroll to top" (Vty.EvKey Vty.KHome [])
-    channelScrollToTop
-  , KB "Scroll to bottom" (Vty.EvKey Vty.KEnd [])
-    channelScrollToBottom
+  [ [key|C-b Load more messages in the current channel          |] loadMoreMessages
+  , [key|C-o Select and open a URL posted to the current channel|] startUrlSelect
+  , [key|Esc      Cancel scrolling and return to channel view   |] (csMode .= Main)
+  , [key|PageUp   Scroll up       |] channelPageUp
+  , [key|PageDown Scroll down     |] channelPageDown
+  , [key|Home     Scroll to top   |] channelScrollToTop
+  , [key|End      Scroll to bottom|] channelScrollToBottom
   ]
 
 onEventChannelScroll :: Vty.Event -> MH ()

@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Events.MessageSelect where
 
 import Prelude ()
@@ -28,54 +30,24 @@ onEventMessageSelectDeleteConfirm _ =
 
 messageSelectKeybindings :: [Keybinding]
 messageSelectKeybindings =
-    [ KB "Cancel message selection"
-         (Vty.EvKey Vty.KEsc []) $ csMode .= Main
-
-    , KB "Cancel message selection"
-         (Vty.EvKey (Vty.KChar 'c') [Vty.MCtrl]) $
-         csMode .= Main
-
-    , KB "Select the previous message"
-         (Vty.EvKey (Vty.KChar 'k') []) $
-         messageSelectUp
-
-    , KB "Select the previous message"
-         (Vty.EvKey Vty.KUp []) $
-         messageSelectUp
+    [ [key|Esc  Cancel message selection|]    (csMode .= Main)
+    , [key|C-c  Cancel message selection|]    (csMode .= Main)
+    , [key|k    Select the previous message|] messageSelectUp
+    , [key|Up   Select the previous message|] messageSelectUp
+    , [key|j    Select the next message|]     messageSelectDown
+    , [key|Down Select the next message|]     messageSelectDown
+    , [key|o    Open all URLs in the selected message|] openSelectedMessageURLs
+    , [key|e    Begin editing the selected message|] beginUpdateMessage
+    , [key|y    Copy a verbatim section to the clipboard|] copyVerbatimToClipboard
+    , [key|r    Begin composing a reply to the selected message|] beginReplyCompose
+    , [key|d    Delete the selected message (with confirmation)|]
+                    beginConfirmDeleteSelectedMessage
 
     , KB (T.pack $ "Move the cursor up by " <> show messagesPerPageOperation <> " messages")
          (Vty.EvKey Vty.KPageUp []) $
          messageSelectUpBy messagesPerPageOperation
 
-    , KB "Select the next message"
-         (Vty.EvKey (Vty.KChar 'j') []) $
-         messageSelectDown
-
-    , KB "Select the next message"
-         (Vty.EvKey Vty.KDown []) $
-         messageSelectDown
-
     , KB (T.pack $ "Move the cursor down by " <> show messagesPerPageOperation <> " messages")
          (Vty.EvKey Vty.KPageDown []) $
          messageSelectDownBy messagesPerPageOperation
-
-    , KB "Open all URLs in the selected message"
-         (Vty.EvKey (Vty.KChar 'o') []) $
-         openSelectedMessageURLs
-
-    , KB "Begin composing a reply to the selected message"
-         (Vty.EvKey (Vty.KChar 'r') []) $
-         beginReplyCompose
-
-    , KB "Begin editing the selected message"
-         (Vty.EvKey (Vty.KChar 'e') []) $
-         beginUpdateMessage
-
-    , KB "Delete the selected message (with confirmation)"
-         (Vty.EvKey (Vty.KChar 'd') []) $
-         beginConfirmDeleteSelectedMessage
-
-    , KB "Copy a verbatim section to the clipboard"
-         (Vty.EvKey (Vty.KChar 'y') []) $
-         copyVerbatimToClipboard
     ]

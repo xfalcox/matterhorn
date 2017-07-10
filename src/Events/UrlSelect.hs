@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Events.UrlSelect where
 
 import Prelude ()
@@ -17,23 +19,17 @@ onEventUrlSelect e
 
 urlSelectKeybindings :: [Keybinding]
 urlSelectKeybindings =
-    [ KB "Open the selected URL, if any"
-         (Vty.EvKey Vty.KEnter []) $ do
+    [ [key|Enter Open the selected URL, if any|] $ do
              openSelectedURL
              csMode .= Main
 
-    , KB "Cancel URL selection"
-         (Vty.EvKey Vty.KEsc []) $ stopUrlSelect
+    , [key|Esc Cancel URL selection|] stopUrlSelect
+    , [key|q   Cancel URL selection|] stopUrlSelect
 
-    , KB "Cancel URL selection"
-         (Vty.EvKey (Vty.KChar 'q') []) $ stopUrlSelect
-
-    , KB "Move cursor down"
-         (Vty.EvKey (Vty.KChar 'j') []) $
+    , [key|j   Move cursor down|] $
            mhHandleEventLensed csUrlList handleListEvent (Vty.EvKey Vty.KDown [])
 
-    , KB "Move cursor up"
-         (Vty.EvKey (Vty.KChar 'k') []) $
+    , [key|k   Move cursor up|] $
            mhHandleEventLensed csUrlList handleListEvent (Vty.EvKey Vty.KUp [])
 
     ]

@@ -1,4 +1,6 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE MultiWayIf #-}
+
 module Events.Main where
 
 import Prelude ()
@@ -33,43 +35,17 @@ onEventMain e = handleEditingInput e
 
 mainKeybindings :: [Keybinding]
 mainKeybindings =
-    [ KB "Show this help screen"
-         (Vty.EvKey (Vty.KFun 1) []) $
-         showHelpScreen mainHelpTopic
+    [ [key|F1      Show this help screen|] $ showHelpScreen mainHelpTopic
+    , [key|C-s     Select a message to edit/reply/delete|] beginMessageSelect
+    , [key|C-r     Reply to the most recent message|] replyToLatestMessage
+    , [key|M-p     Toggle message preview|] toggleMessagePreview
+    , [key|M-k     Invoke *$EDITOR* to edit the current message|] invokeExternalEditor
+    , [key|C-g     Enter fast channel selection mode|] beginChannelSelect
+    , [key|C-q     Quit|] requestQuit
+    , [key|Tab     Tab-complete forward|] $ tabComplete Forwards
+    , [key|BackTab Tab-complete backward|] $ tabComplete Backwards
 
-    , KB "Select a message to edit/reply/delete"
-         (Vty.EvKey (Vty.KChar 's') [Vty.MCtrl]) $
-         beginMessageSelect
-
-    , KB "Reply to the most recent message"
-         (Vty.EvKey (Vty.KChar 'r') [Vty.MCtrl]) $
-         replyToLatestMessage
-
-    , KB "Toggle message preview"
-         (Vty.EvKey (Vty.KChar 'p') [Vty.MMeta]) $
-         toggleMessagePreview
-
-    , KB "Invoke *$EDITOR* to edit the current message"
-         (Vty.EvKey (Vty.KChar 'k') [Vty.MMeta]) $
-         invokeExternalEditor
-
-    , KB "Enter fast channel selection mode"
-         (Vty.EvKey (Vty.KChar 'g') [Vty.MCtrl]) $
-         beginChannelSelect
-
-    , KB "Quit"
-         (Vty.EvKey (Vty.KChar 'q') [Vty.MCtrl]) $ requestQuit
-
-    , KB "Tab-complete forward"
-         (Vty.EvKey (Vty.KChar '\t') []) $
-         tabComplete Forwards
-
-    , KB "Tab-complete backward"
-         (Vty.EvKey (Vty.KBackTab) []) $
-         tabComplete Backwards
-
-    , KB "Scroll up in the channel input history"
-         (Vty.EvKey Vty.KUp []) $ do
+    , [key|Up Scroll up in the channel input history|] $ do
              -- Up in multiline mode does the usual thing; otherwise we
              -- navigate the history.
              isMultiline <- use (csEditState.cedMultiline)
@@ -78,8 +54,7 @@ mainKeybindings =
                                            (Vty.EvKey Vty.KUp [])
                  False -> channelHistoryBackward
 
-    , KB "Scroll down in the channel input history"
-         (Vty.EvKey Vty.KDown []) $ do
+    , [key|Down Scroll down in the channel input history|] $ do
              -- Down in multiline mode does the usual thing; otherwise
              -- we navigate the history.
              isMultiline <- use (csEditState.cedMultiline)
@@ -88,8 +63,7 @@ mainKeybindings =
                                            (Vty.EvKey Vty.KDown [])
                  False -> channelHistoryForward
 
-    , KB "Page up in the channel message list"
-         (Vty.EvKey Vty.KPageUp []) $ do
+    , [key|PageUp Page up in the channel message list|] $ do
              cId <- use csCurrentChannelId
              let vp = ChannelMessages cId
              mh $ invalidateCacheEntry vp
@@ -97,24 +71,12 @@ mainKeybindings =
              mh $ vScrollBy (viewportScroll vp) (-1 * pageAmount)
              csMode .= ChannelScroll
 
-    , KB "Change to the next channel in the channel list"
-         (Vty.EvKey (Vty.KChar 'n') [Vty.MCtrl]) $
-         nextChannel
+    , [key|C-n   Change to the next channel in the channel list|] nextChannel
+    , [key|C-p   Change to the previous channel in the channel list|] prevChannel
+    , [key|M-a   Change to the next channel with unread messages|] nextUnreadChannel
+    , [key|M-s   Change to the most recently-focused channel|] recentChannel
 
-    , KB "Change to the previous channel in the channel list"
-         (Vty.EvKey (Vty.KChar 'p') [Vty.MCtrl]) $
-         prevChannel
-
-    , KB "Change to the next channel with unread messages"
-         (Vty.EvKey (Vty.KChar 'a') [Vty.MMeta]) $
-         nextUnreadChannel
-
-    , KB "Change to the most recently-focused channel"
-         (Vty.EvKey (Vty.KChar 's') [Vty.MMeta]) $
-         recentChannel
-
-    , KB "Send the current message"
-         (Vty.EvKey Vty.KEnter []) $ do
+    , [key|Enter Send the current message|] $ do
              isMultiline <- use (csEditState.cedMultiline)
              case isMultiline of
                  -- Enter in multiline mode does the usual thing; we
@@ -126,26 +88,10 @@ mainKeybindings =
                    csCurrentCompletion .= Nothing
                    handleInputSubmission
 
-    , KB "Select and open a URL posted to the current channel"
-         (Vty.EvKey (Vty.KChar 'o') [Vty.MCtrl]) $
-           startUrlSelect
-
-    , KB "Clear the current channel's unread message indicator"
-         (Vty.EvKey (Vty.KChar 'l') [Vty.MMeta]) $ do
-           cId <- use csCurrentChannelId
-           clearNewMessageCutoff cId
-
-    , KB "Toggle multi-line message compose mode"
-         (Vty.EvKey (Vty.KChar 'e') [Vty.MMeta]) $
-           toggleMultilineEditing
-
-    , KB "Cancel message reply or update"
-         (Vty.EvKey Vty.KEsc []) $
-         cancelReplyOrEdit
-
-    , KB "Cancel message reply or update"
-         (Vty.EvKey (Vty.KChar 'c') [Vty.MCtrl]) $
-         cancelReplyOrEdit
+    , [key|M-o  Select and open a URL posted to the current channel|] startUrlSelect
+    , [key|M-e  Toggle multi-line message compose mode|] toggleMultilineEditing
+    , [key|Esc  Cancel message reply or update|] cancelReplyOrEdit
+    , [key|C-c  Cancel message reply or update|] cancelReplyOrEdit
     ]
 
 handleInputSubmission :: MH ()

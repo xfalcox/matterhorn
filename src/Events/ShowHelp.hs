@@ -1,3 +1,5 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 module Events.ShowHelp where
 
 import Prelude ()
@@ -19,22 +21,11 @@ onEventShowHelp _ = return ()
 
 helpKeybindings :: [Keybinding]
 helpKeybindings =
-    [ KB "Scroll up"
-         (Vty.EvKey Vty.KUp []) $ do
-             mh $ vScrollBy (viewportScroll HelpViewport) (-1)
-    , KB "Scroll down"
-         (Vty.EvKey Vty.KDown []) $ do
-             mh $ vScrollBy (viewportScroll HelpViewport) 1
-    , KB "Page up"
-         (Vty.EvKey Vty.KPageUp []) $ do
-             mh $ vScrollBy (viewportScroll HelpViewport) (-1 * pageAmount)
-    , KB "Page down"
-         (Vty.EvKey Vty.KPageDown []) $ do
-             mh $ vScrollBy (viewportScroll HelpViewport) pageAmount
-    , KB "Page down"
-         (Vty.EvKey (Vty.KChar ' ') []) $ do
-             mh $ vScrollBy (viewportScroll HelpViewport) pageAmount
-    , KB "Return to the main interface"
-         (Vty.EvKey Vty.KEsc []) $ do
-           csMode .= Main
+    [ [key|Up       Scroll up|]   $ vps (-1)
+    , [key|Down     Scroll down|] $ vps 1
+    , [key|PageUp   Page up|]     $ vps (-1 * pageAmount)
+    , [key|PageDown Page down|]   $ vps pageAmount
+    , [key|Space    Page down|]   $ vps pageAmount
+    , [key|Esc      Return to the main interface|] $ csMode .= Main
     ]
+    where vps = mh . vScrollBy (viewportScroll HelpViewport)
