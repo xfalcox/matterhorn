@@ -93,6 +93,8 @@ module Types
   , cedInputHistoryPosition
   , cedLastChannelInput
 
+  , AsyncRequest(..)
+
   , PostListOverlayState
   , postListSelected
   , postListPosts
@@ -485,9 +487,21 @@ emptyEditState hist sp = ChatEditState
   , _cedMisspellings         = mempty
   }
 
+-- * Asynchronous worker requests
+data AsyncRequest =
+    GenericAsync (IO (MH ()))
+    -- ^ XXX TODO Get rid of this eventually.
+    | GetPostReactions ChannelId PostId
+    | FetchAttachment T.Text ChannelId PostId FileId
+    | SpellCheck Aspell [T.Text]
+    | SetTimeZone TimeZoneSeries
+    | LogErrorMessage T.Text
+    | ExpireUserTypingStates
+    -- ^ Server hostname
+
 -- | A 'RequestChan' is a queue of operations we have to perform
 --   in the background to avoid blocking on the main loop
-type RequestChan = STM.TChan (IO (MH ()))
+type RequestChan = STM.TChan AsyncRequest
 
 -- | The 'HelpScreen' type represents the set of possible 'Help'
 --   dialogues we have to choose from.

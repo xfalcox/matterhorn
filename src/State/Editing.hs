@@ -15,7 +15,6 @@ import           Control.Monad (when)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString as BS
 import           Data.Monoid ((<>))
-import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Zipper as Z
@@ -28,7 +27,6 @@ import qualified System.Exit as Sys
 import qualified System.IO as Sys
 import qualified System.IO.Temp as Sys
 import qualified System.Process as Sys
-import           Text.Aspell (AspellResponse(..), mistakeWord, askAspell)
 
 import           Config
 import           Types
@@ -242,17 +240,7 @@ requestSpellCheck = do
         Just (checker, _) -> do
             -- Get the editor contents.
             contents <- getEditContents <$> use (csEditState.cedEditor)
-            doAsyncWith Preempt $ do
-                -- For each line in the editor, submit an aspell request.
-                let query = concat <$> mapM (askAspell checker) contents
-                    postMistakes :: [AspellResponse] -> MH ()
-                    postMistakes responses = do
-                        let getMistakes AllCorrect = []
-                            getMistakes (Mistakes ms) = mistakeWord <$> ms
-                            allMistakes = S.fromList $ concat $ getMistakes <$> responses
-                        csEditState.cedMisspellings .= allMistakes
-
-                tryMM query (return . postMistakes)
+            doAsyncWith Preempt $ SpellCheck checker contents
 
 editorEmpty :: Editor T.Text a -> Bool
 editorEmpty e = cursorIsAtEnd e &&

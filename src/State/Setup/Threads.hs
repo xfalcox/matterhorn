@@ -18,16 +18,13 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.Delay
 import           Control.Exception (SomeException, try, finally)
 import           Control.Monad (forever, when, void, forM_)
-import           Control.Monad.IO.Class (liftIO)
 import           Data.List (isInfixOf)
 import qualified Data.Foldable as F
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import           Data.Maybe (catMaybes)
 import           Data.Monoid ((<>))
-import           Data.Time (getCurrentTime, addUTCTime)
 import           Data.Time.LocalTime.TimeZone.Series (TimeZoneSeries)
-import           Lens.Micro.Platform
 import           System.Exit (ExitCode(ExitSuccess))
 import           System.IO (hPutStrLn, hFlush)
 import           System.IO.Temp (openTempFile)
@@ -38,12 +35,10 @@ import           Network.Mattermost.Endpoints
 import           Network.Mattermost.Types
 
 import           Constants
-import           State.Common
 import           State.Editing (requestSpellCheck)
 import           TimeUtils (lookupLocalTimeZone)
 import           Types
-import           Types.Users
-import           Types.Channels
+import           Async
 
 updateUserStatuses :: STM.TVar (Seq.Seq UserId) -> MVar () -> Session -> IO (MH ())
 updateUserStatuses usersVar lock session = do
@@ -65,7 +60,7 @@ startUserRefreshThread usersVar lock session requestChan = void $ forkIO $ forev
       seconds = (* (1000 * 1000))
       userRefreshInterval = 30
       refresh = do
-          STM.atomically $ STM.writeTChan requestChan $ do
+          STM.atomically $ STM.writeTChan requestChan $ GenericAsync $ do
             rs <- try $ updateUserStatuses usersVar lock session
             case rs of
               Left (_ :: SomeException) -> return (return ())
@@ -80,12 +75,7 @@ startTypingUsersRefreshThread requestChan = void $ forkIO $ forever refresh
     seconds = (* (1000 * 1000))
     refreshIntervalMicros = ceiling $ seconds $ userTypingExpiryInterval / 2
     refresh = do
-      STM.atomically $ STM.writeTChan requestChan $ return $ do
-        now <- liftIO getCurrentTime
-        let expiry = addUTCTime (- userTypingExpiryInterval) now
-        let expireUsers c = c & ccInfo.cdTypingUsers %~ expireTypingUsers expiry
-        csChannels . mapped %= expireUsers
-
+      STM.atomically $ STM.writeTChan requestChan ExpireUserTypingStates
       threadDelay refreshIntervalMicros
 
 startSubprocessLoggerThread :: STM.TChan ProgramOutput -> RequestChan -> IO ()
@@ -120,12 +110,10 @@ startSubprocessLoggerThread logChan requestChan = do
                               ]
                   hFlush logHandle
 
-                  STM.atomically $ STM.writeTChan requestChan $ do
-                      return $ do
-                          let msg = T.pack $
-                                "An error occurred when running " <> show progName <>
-                                "; see " <> logPath <> " for details."
-                          mhError msg
+                  let msg = T.pack $
+                        "An error occurred when running " <> show progName <>
+                        "; see " <> logPath <> " for details."
+                  STM.atomically $ STM.writeTChan requestChan $ LogErrorMessage msg
 
                   logMonitor (Just (logPath, logHandle))
 
@@ -142,8 +130,7 @@ startTimezoneMonitorThread tz requestChan = do
 
         newTz <- lookupLocalTimeZone
         when (newTz /= prevTz) $
-            STM.atomically $ STM.writeTChan requestChan $ do
-                return $ timeZone .= newTz
+            STM.atomically $ STM.writeTChan requestChan $ SetTimeZone newTz
 
         timezoneMonitor newTz
 
@@ -241,14 +228,14 @@ startSpellCheckerThread eventChan spellCheckTimeout = do
 -------------------------------------------------------------------
 -- Async worker thread
 
-startAsyncWorkerThread :: Config -> STM.TChan (IO (MH ())) -> BChan MHEvent -> IO ()
-startAsyncWorkerThread c r e = void $ forkIO $ asyncWorker c r e
+startAsyncWorkerThread :: Config -> STM.TChan AsyncRequest -> BChan MHEvent -> Session -> IO ()
+startAsyncWorkerThread c r e s = void $ forkIO $ asyncWorker c r e s
 
-asyncWorker :: Config -> STM.TChan (IO (MH ())) -> BChan MHEvent -> IO ()
-asyncWorker c r e = forever $ doAsyncWork c r e
+asyncWorker :: Config -> STM.TChan AsyncRequest -> BChan MHEvent -> Session -> IO ()
+asyncWorker c r e s = forever $ doAsyncWork c r e s
 
-doAsyncWork :: Config -> STM.TChan (IO (MH ())) -> BChan MHEvent -> IO ()
-doAsyncWork config requestChan eventChan = do
+doAsyncWork :: Config -> STM.TChan AsyncRequest -> BChan MHEvent -> Session -> IO ()
+doAsyncWork config requestChan eventChan session = do
     startWork <- case configShowBackground config of
         Disabled -> return $ return ()
         Active -> do chk <- STM.atomically $ STM.tryPeekTChan requestChan
@@ -272,7 +259,7 @@ doAsyncWork config requestChan eventChan = do
 
     req <- STM.atomically $ STM.readTChan requestChan
     startWork
-    res <- try req
+    res <- try $ handleAsyncRequest session req
     case res of
       Left e    -> when (not $ shouldIgnore e) $
                    writeBChan eventChan (AsyncErrEvent e)

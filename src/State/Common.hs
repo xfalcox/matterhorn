@@ -5,11 +5,10 @@ import           Prelude.Compat
 
 import qualified Control.Concurrent.STM as STM
 import           Control.Exception (try)
+import           Control.Monad (forM_)
 import           Control.Monad.IO.Class (liftIO)
-import qualified Data.Foldable as F
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as Map
-import           Data.Maybe (isNothing)
 import           Data.Monoid ((<>))
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
@@ -17,7 +16,6 @@ import qualified Data.Text as T
 import           Lens.Micro.Platform
 import           System.Hclip (setClipboard, ClipboardException(..))
 
-import           Network.Mattermost.Endpoints
 import           Network.Mattermost.Types
 import           Network.Mattermost.Lenses
 import           Network.Mattermost.Exceptions
@@ -99,75 +97,75 @@ tryMM act onSuccess = do
 data AsyncPriority = Preempt | Normal
 
 -- | Run a computation in the background, ignoring any results from it.
-doAsync :: AsyncPriority -> IO () -> MH ()
-doAsync prio act = doAsyncWith prio (act >> return (return ()))
+-- doAsync :: AsyncPriority -> IO () -> MH ()
+-- doAsync prio act = doAsyncWith prio (act >> return (return ()))
 
 -- | Run a computation in the background, returning a computation to be
 -- called on the 'ChatState' value.
-doAsyncWith :: AsyncPriority -> IO (MH ()) -> MH ()
-doAsyncWith prio act = do
+doAsyncWith :: AsyncPriority -> AsyncRequest -> MH ()
+doAsyncWith prio req = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
           Normal  -> STM.writeTChan
     queue <- use (csResources.crRequestQueue)
-    liftIO $ STM.atomically $ putChan queue act
+    liftIO $ STM.atomically $ putChan queue req
 
-doAsyncIO :: AsyncPriority -> ChatState -> IO () -> IO ()
-doAsyncIO prio st act =
-  doAsyncWithIO prio st (act >> return (return ()))
+-- doAsyncIO :: AsyncPriority -> ChatState -> IO () -> IO ()
+-- doAsyncIO prio st act =
+--   doAsyncWithIO prio st (act >> return (return ()))
 
 -- | Run a computation in the background, returning a computation to be
 -- called on the 'ChatState' value.
-doAsyncWithIO :: AsyncPriority -> ChatState -> IO (MH ()) -> IO ()
-doAsyncWithIO prio st act = do
+doAsyncWithIO :: AsyncPriority -> ChatState -> AsyncRequest -> IO ()
+doAsyncWithIO prio st req = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
           Normal  -> STM.writeTChan
     let queue = st^.csResources.crRequestQueue
-    STM.atomically $ putChan queue act
+    STM.atomically $ putChan queue req
 
 -- | Performs an asynchronous IO operation. On completion, the final
 -- argument a completion function is executed in an MH () context in the
 -- main (brick) thread.
-doAsyncMM :: AsyncPriority
-          -- ^ the priority for this async operation
-          -> (Session -> TeamId -> IO a)
-          -- ^ the async MM channel-based IO operation
-          -> (a -> MH ())
-          -- ^ function to process the results in brick event handling
-          -- context
-          -> MH ()
-doAsyncMM prio mmOp eventHandler = do
-  session <- getSession
-  tId <- gets myTeamId
-  doAsyncWith prio $ do
-    r <- mmOp session tId
-    return $ eventHandler r
+-- doAsyncMM :: AsyncPriority
+--           -- ^ the priority for this async operation
+--           -> (Session -> TeamId -> IO a)
+--           -- ^ the async MM channel-based IO operation
+--           -> (a -> MH ())
+--           -- ^ function to process the results in brick event handling
+--           -- context
+--           -> MH ()
+-- doAsyncMM prio mmOp eventHandler = do
+--   session <- getSession
+--   tId <- gets myTeamId
+--   doAsyncWith prio $ do
+--     r <- mmOp session tId
+--     return $ eventHandler r
 
 -- | Helper type for a function to perform an asynchronous MM operation
 -- on a channel and then invoke an MH completion event.
-type DoAsyncChannelMM a =
-    AsyncPriority
-    -- ^ the priority for this async operation
-    -> ChannelId
-    -- ^ The channel
-    -> (Session -> TeamId -> ChannelId -> IO a)
-    -- ^ the asynchronous Mattermost channel-based IO operation
-    -> (ChannelId -> a -> MH ())
-    -- ^ function to process the results in brick event handling context
-    -> MH ()
+-- type DoAsyncChannelMM a =
+--     AsyncPriority
+--     -- ^ the priority for this async operation
+--     -> ChannelId
+--     -- ^ The channel
+--     -> (Session -> TeamId -> ChannelId -> IO a)
+--     -- ^ the asynchronous Mattermost channel-based IO operation
+--     -> (ChannelId -> a -> MH ())
+--     -- ^ function to process the results in brick event handling context
+--     -> MH ()
 
 -- | Performs an asynchronous IO operation on a specific channel. On
 -- completion, the final argument a completion function is executed in
 -- an MH () context in the main (brick) thread.
-doAsyncChannelMM :: DoAsyncChannelMM a
-doAsyncChannelMM prio cId mmOp eventHandler =
-  doAsyncMM prio (\s t -> mmOp s t cId) (eventHandler cId)
+-- doAsyncChannelMM :: DoAsyncChannelMM a
+-- doAsyncChannelMM prio cId mmOp eventHandler =
+--   doAsyncMM prio (\s t -> mmOp s t cId) (eventHandler cId)
 
 -- | Use this convenience function if no operation needs to be
 -- performed in the MH state after an async operation completes.
-endAsyncNOP :: ChannelId -> a -> MH ()
-endAsyncNOP _ _ = return ()
+-- endAsyncNOP :: ChannelId -> a -> MH ()
+-- endAsyncNOP _ _ = return ()
 
 -- * Client Messages
 
@@ -205,23 +203,8 @@ asyncFetchAttachments :: Post -> MH ()
 asyncFetchAttachments p = do
   let cId = (p^.postChannelIdL)
       pId = (p^.postIdL)
-  session <- getSession
-  host    <- use (csResources.crConn.cdHostnameL)
-  F.forM_ (p^.postFileIdsL) $ \fId -> doAsyncWith Normal $ do
-    info <- mmGetMetadataForFile fId session
-    let scheme = "https://"
-        attUrl = scheme <> host <> urlForFile fId
-        attachment = mkAttachment (fileInfoName info) attUrl fId
-        addIfMissing a as =
-            if isNothing $ Seq.elemIndexL a as
-            then a Seq.<| as
-            else as
-        addAttachment m
-          | m^.mPostId == Just pId =
-            m & mAttachments %~ (addIfMissing attachment)
-          | otherwise              = m
-    return $
-      csChannel(cId).ccContents.cdMessages.traversed %= addAttachment
+  host <- use (csResources.crConn.cdHostnameL)
+  forM_ (p^.postFileIdsL) (doAsyncWith Normal . FetchAttachment host cId pId)
 
 -- | Add a 'ClientMessage' to the current channel's message list
 addClientMessage :: ClientMessage -> MH ()
@@ -234,15 +217,13 @@ addClientMessage msg = do
 --   the current channel's message list
 postInfoMessage :: T.Text -> MH ()
 postInfoMessage err = do
-    msg <- newClientMessage Informative err
-    doAsyncWith Normal (return $ addClientMessage msg)
+    addClientMessage =<< newClientMessage Informative err
 
 -- | Add a new 'ClientMessage' representing an error message to
 --   the current channel's message list
 postErrorMessage' :: T.Text -> MH ()
 postErrorMessage' err = do
-    msg <- newClientMessage Error err
-    doAsyncWith Normal (return $ addClientMessage msg)
+    addClientMessage =<< newClientMessage Error err
 
 -- | Raise a rich error
 mhError :: T.Text -> MH ()
@@ -262,9 +243,7 @@ numScrollbackPosts = 100
 asyncFetchReactionsForPost :: ChannelId -> Post -> MH ()
 asyncFetchReactionsForPost cId p
   | not (p^.postHasReactionsL) = return ()
-  | otherwise = doAsyncChannelMM Normal cId
-        (\s _ _ -> fmap F.toList (mmGetReactionsForPost (p^.postIdL) s))
-        addReactions
+  | otherwise = doAsyncWith Normal $ GetPostReactions cId (p^.postIdL)
 
 addReactions :: ChannelId -> [Reaction] -> MH ()
 addReactions cId rs = csChannel(cId).ccContents.cdMessages %= fmap upd

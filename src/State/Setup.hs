@@ -210,7 +210,7 @@ initializeState cr myTeam me = do
   -- Start background worker threads:
   --
   -- * Main async queue worker thread
-  startAsyncWorkerThread (cr^.crConfiguration) (cr^.crRequestQueue) (cr^.crEventQueue)
+  startAsyncWorkerThread (cr^.crConfiguration) (cr^.crRequestQueue) (cr^.crEventQueue) session
 
   -- * User status refresher
   startUserRefreshThread (cr^.crUserIdSet) (cr^.crUserStatusLock) session requestChan

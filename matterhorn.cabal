@@ -33,6 +33,7 @@ executable matterhorn
                        Connection
                        Completion
                        App
+                       Async
                        Constants
                        State
                        State.Common
