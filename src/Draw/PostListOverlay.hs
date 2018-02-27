@@ -5,7 +5,6 @@ module Draw.PostListOverlay where
 import           Prelude ()
 import           Prelude.Compat
 
-import           Control.Monad.Trans.Reader (withReaderT)
 import qualified Data.Foldable as F
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
@@ -25,14 +24,6 @@ import Types.Users
 import Draw.Main
 import Draw.Messages
 import Draw.Util
-
-hLimitWithPadding :: Int -> Widget n -> Widget n
-hLimitWithPadding pad contents = Widget
-  { hSize  = Fixed
-  , vSize  = (vSize contents)
-  , render =
-      withReaderT (& availWidthL  %~ (\ n -> n - (2 * pad))) $ render $ cropToContext contents
-  }
 
 drawPostListOverlay :: PostListContents -> ChatState -> [Widget Name]
 drawPostListOverlay contents st =

@@ -4,6 +4,7 @@ import Prelude ()
 import Prelude.Compat
 
 import Brick
+import Control.Monad.Trans.Reader (withReaderT)
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import Data.Time.Clock (UTCTime(..))
@@ -82,3 +83,11 @@ mkChannelName c = T.append sigil (c^.cdName)
 
 mkDMChannelName :: UserInfo -> T.Text
 mkDMChannelName u = T.cons (userSigilFromInfo u) (u^.uiName)
+
+hLimitWithPadding :: Int -> Widget n -> Widget n
+hLimitWithPadding pad contents = Widget
+  { hSize  = Fixed
+  , vSize  = (vSize contents)
+  , render =
+      withReaderT (& availWidthL  %~ (\ n -> n - (2 * pad))) $ render $ cropToContext contents
+  }
