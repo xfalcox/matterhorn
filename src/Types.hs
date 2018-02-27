@@ -497,6 +497,8 @@ data AsyncRequest =
     | SetTimeZone TimeZoneSeries
     | LogErrorMessage T.Text
     | ExpireUserTypingStates
+    | HandleNewUsers (Seq.Seq UserId)
+    | SendMessage EditMode ChannelId T.Text
     -- ^ Server hostname
 
 -- | A 'RequestChan' is a queue of operations we have to perform

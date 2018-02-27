@@ -1855,17 +1855,7 @@ sendMessage mode msg =
                     mhError m
                 Connected -> do
                     let chanId = st^.csCurrentChannelId
-                    session <- getSession
-                    doAsync Preempt $ do
-                      case mode of
-                        NewPost -> do
-                            let pendingPost = rawPost msg chanId
-                            void $ MM.mmCreatePost pendingPost session
-                        Replying _ p -> do
-                            let pendingPost = (rawPost msg chanId) { rawPostRootId = postRootId p <|> (Just $ postId p) }
-                            void $ MM.mmCreatePost pendingPost session
-                        Editing p -> do
-                            void $ MM.mmUpdatePost (postId p) (postUpdate msg) session
+                    doAsyncWith Preempt $ SendMessage mode chanId msg
 
 handleNewUserDirect :: User -> MH ()
 handleNewUserDirect newUser = do
@@ -1873,15 +1863,7 @@ handleNewUserDirect newUser = do
     addNewUser usrInfo
 
 handleNewUsers :: Seq.Seq UserId -> MH ()
-handleNewUsers newUserIds = doAsyncMM Preempt getUserInfo addNewUsers
-    where getUserInfo session _ =
-              do nUsers  <- MM.mmGetUsersByIds newUserIds session
-                 let usrInfo u = userInfoFromUser u True
-                     usrList = F.toList nUsers
-                 return $ usrInfo <$> usrList
-
-          addNewUsers :: [UserInfo] -> MH ()
-          addNewUsers = mapM_ addNewUser
+handleNewUsers newUserIds = doAsyncWith Preempt $ HandleNewUsers newUserIds
 
 -- | Handle the typing events from the websocket to show the currently typing users on UI
 handleTypingUser :: UserId -> ChannelId -> MH ()

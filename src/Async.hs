@@ -3,6 +3,8 @@ module Async
   )
 where
 
+import           Control.Applicative ((<|>))
+import           Control.Monad (void)
 import           Control.Monad.IO.Class (liftIO)
 import           Data.Monoid ((<>))
 import qualified Data.Foldable as F
@@ -61,3 +63,20 @@ handleAsyncRequest _ ExpireUserTypingStates = return $ do
     let expiry = addUTCTime (- userTypingExpiryInterval) now
     let expireUsers c = c & ccInfo.cdTypingUsers %~ expireTypingUsers expiry
     csChannels . mapped %= expireUsers
+handleAsyncRequest session (HandleNewUsers newUserIds) = do
+    nUsers <- mmGetUsersByIds newUserIds session
+    let usrInfo u = userInfoFromUser u True
+        usrList = F.toList nUsers
+    return $ mapM_ addNewUser $ usrInfo <$> usrList
+handleAsyncRequest session (SendMessage mode chanId msg) = do
+    case mode of
+      NewPost -> do
+          let pendingPost = rawPost msg chanId
+          void $ mmCreatePost pendingPost session
+      Replying _ p -> do
+          let pendingPost = (rawPost msg chanId) { rawPostRootId = postRootId p <|> (Just $ postId p) }
+          void $ mmCreatePost pendingPost session
+      Editing p -> do
+          void $ mmUpdatePost (postId p) (postUpdate msg) session
+
+    return $ return ()
