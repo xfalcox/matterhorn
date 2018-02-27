@@ -1186,8 +1186,7 @@ handleNewChannel_ permitPostpone switch nc member = do
                                 False -> return $ Just $ channelName nc
                                 True -> do
                                     handleNewUsers $ Seq.singleton otherUserId
-                                    doAsyncWith Normal $
-                                        return $ handleNewChannel_ False switch nc member
+                                    handleNewChannel_ False switch nc member
                                     return Nothing
                         Just ncUsername ->
                             return $ Just $ ncUsername
