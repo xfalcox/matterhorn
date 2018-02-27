@@ -1365,18 +1365,7 @@ addMessageToState newPostData = do
                   case cp^.cpInReplyToPost of
                       Just parentId ->
                           case getMessageForPostId st parentId of
-                              Nothing -> do
-                                  doAsyncChannelMM Preempt cId
-                                      (\s _ _ -> MM.mmGetThread parentId s)
-                                      (\_ p -> do
-                                          let postMap = HM.fromList [ ( pId
-                                                                      , clientPostToMessage
-                                                                        (toClientPost x (x^.postParentIdL))
-                                                                      )
-                                                                    | (pId, x) <- HM.toList (p^.postsPostsL)
-                                                                    ]
-                                          csPostMap %= HM.union postMap
-                                      )
+                              Nothing -> doAsyncWith Preempt $ FetchThread parentId
                               _ -> return ()
                       _ -> return ()
 
@@ -1447,10 +1436,7 @@ fetchVisibleIfNeeded = do
 setChannelTopic :: T.Text -> MH ()
 setChannelTopic msg = do
     cId <- use csCurrentChannelId
-    let patch = defaultChannelPatch { channelPatchHeader = Just msg }
-    doAsyncChannelMM Preempt cId
-        (\s _ _ -> MM.mmPatchChannel cId patch s)
-        (\_ _ -> return ())
+    doAsyncWith Preempt $ SetChannelTopic cId msg
 
 channelHistoryForward :: MH ()
 channelHistoryForward = do
@@ -1716,7 +1702,7 @@ openURL link = do
             case configURLOpenCommandInteractive cfg of
                 False -> do
                     outputChan <- use (csResources.crSubprocessLog)
-                    doAsyncWith Preempt $ do
+                    doAsyncWith Preempt $ GenericAsync $ do
                         args <- act
                         runLoggedCommand False outputChan (T.unpack urlOpenCommand)
                                          args Nothing Nothing

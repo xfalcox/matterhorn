@@ -499,6 +499,8 @@ data AsyncRequest =
     | ExpireUserTypingStates
     | HandleNewUsers (Seq.Seq UserId)
     | SendMessage EditMode ChannelId T.Text
+    | SetChannelTopic ChannelId T.Text
+    | FetchThread PostId
     -- ^ Server hostname
 
 -- | A 'RequestChan' is a queue of operations we have to perform
