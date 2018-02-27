@@ -4,14 +4,16 @@ module Scripts
   )
 where
 
+import Brick.Widgets.Edit
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
+import Data.Text.Zipper
 import Data.Monoid ((<>))
 import Control.Concurrent (takeMVar, newEmptyMVar)
 import qualified Control.Concurrent.STM as STM
 import System.Exit (ExitCode(..))
-import Lens.Micro.Platform (use)
+import Lens.Micro.Platform (use, (.=))
 
 import Types
 import State (sendMessage, runLoggedCommand)
@@ -51,26 +53,28 @@ runScript outputChan fp text = do
 
 listScripts :: MH ()
 listScripts = do
-  (execs, nonexecs) <- liftIO getAllScripts
-  let scripts = ("Available scripts are:\n" <>
-                 mconcat [ "  - " <> T.pack cmd <> "\n"
-                         | cmd <- execs
-                         ])
-  postInfoMessage scripts
-  case nonexecs of
-    [] -> return ()
-    _  -> do
-      let errMsg = ("Some non-executable script files are also " <>
-                    "present. If you want to run these as scripts " <>
-                    "in Matterhorn, mark them executable with \n" <>
-                    "```\n" <>
-                    "$ chmod u+x [script path]\n" <>
-                    "```\n" <>
-                    "\n" <>
-                    mconcat [ "  - " <> T.pack cmd <> "\n"
-                            | cmd <- nonexecs
-                            ] <> "\n" <> scriptHelpAddendum)
-      mhError errMsg
+  (execs, _nonexecs) <- liftIO getAllScripts
+  genericListMode "Available Scripts" execs (T.pack) $ \s ->
+    csEditState.cedEditor.editContentsL .= gotoEOL (textZipper [T.pack ("/" ++ s ++ " ")] Nothing)
+  -- let scripts = ("Available scripts are:\n" <>
+  --                mconcat [ "  - " <> T.pack cmd <> "\n"
+  --                        | cmd <- execs
+  --                        ])
+  -- postInfoMessage scripts
+  -- case nonexecs of
+  --   [] -> return ()
+  --   _  -> do
+  --     let errMsg = ("Some non-executable script files are also " <>
+  --                   "present. If you want to run these as scripts " <>
+  --                   "in Matterhorn, mark them executable with \n" <>
+  --                   "```\n" <>
+  --                   "$ chmod u+x [script path]\n" <>
+  --                   "```\n" <>
+  --                   "\n" <>
+  --                   mconcat [ "  - " <> T.pack cmd <> "\n"
+  --                           | cmd <- nonexecs
+  --                           ] <> "\n" <> scriptHelpAddendum)
+  --     mhError errMsg
 
 scriptHelpAddendum :: T.Text
 scriptHelpAddendum =

@@ -844,10 +844,8 @@ getNextUnreadChannel st =
 
 listThemes :: MH ()
 listThemes = do
-    let themeList = T.intercalate "\n\n" $
-                    "Available built-in themes:" :
-                    (("  " <>) <$> internalThemeName <$> internalThemes)
-    postInfoMessage themeList
+    let themeList = internalThemeName <$> internalThemes
+    genericListMode "Select Theme" themeList id setTheme
 
 setTheme :: T.Text -> MH ()
 setTheme name =

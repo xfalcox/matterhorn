@@ -9,6 +9,7 @@ import Draw.Main
 import Draw.ShowHelp
 import Draw.LeaveChannelConfirm
 import Draw.DeleteChannelConfirm
+import Draw.GenericListOverlay
 import Draw.PostListOverlay
 import Draw.UserListOverlay
 import Draw.JoinChannel
@@ -28,3 +29,4 @@ draw st =
         DeleteChannelConfirm       -> drawDeleteChannelConfirm st
         PostListOverlay contents   -> drawPostListOverlay contents st
         UserListOverlay            -> drawUserListOverlay st
+        GenericListOverlay         -> drawGenericListOverlay st

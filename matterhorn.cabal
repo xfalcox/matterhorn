@@ -37,6 +37,7 @@ executable matterhorn
                        State
                        State.Common
                        State.Editing
+                       State.GenericListOverlay
                        State.Messages
                        State.PostListOverlay
                        State.Setup
@@ -55,9 +56,11 @@ executable matterhorn
                        Draw.UserListOverlay
                        Draw.JoinChannel
                        Draw.Util
+                       Draw.GenericListOverlay
                        InputHistory
                        IOUtil
                        Events
+                       Events.GenericListOverlay
                        Events.Keybindings
                        Events.ShowHelp
                        Events.MessageSelect

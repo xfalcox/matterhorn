@@ -71,6 +71,7 @@ module Types
   , csChannel
   , csChannels
   , csChannelSelectState
+  , csGenericListOverlay
   , csEditState
   , timeZone
   , whenMode
@@ -108,6 +109,10 @@ module Types
   , userListRequestingMore
   , userListHasAllResults
   , userListEnterHandler
+
+  , GenericListOverlayState(..)
+  , emptyGenericListOverlay
+  , genericListMode
 
   , listFromUserSearchResults
 
@@ -341,6 +346,7 @@ data Name = ChannelMessages ChannelId
           | MessagePreviewViewport
           | UserListSearchInput
           | UserListSearchResults
+          | GenericListViewport
           deriving (Eq, Show, Ord)
 
 -- | The sum type of exceptions we expect to encounter on authentication
@@ -528,6 +534,7 @@ data Mode =
     | MessageSelectDeleteConfirm
     | PostListOverlay PostListContents
     | UserListOverlay
+    | GenericListOverlay
     deriving (Eq)
 
 -- | We're either connected or we're not.
@@ -558,6 +565,7 @@ data ChatState = ChatState
   , _csMessageSelect               :: MessageSelectState
   , _csPostListOverlay             :: PostListOverlayState
   , _csUserListOverlay             :: UserListOverlayState
+  , _csGenericListOverlay          :: GenericListOverlayState
   }
 
 data StartupStateInfo =
@@ -594,6 +602,7 @@ newState (StartupStateInfo rs i u m tz hist sp ns) = ChatState
   , _csMessageSelect               = MessageSelectState Nothing
   , _csPostListOverlay             = PostListOverlayState mempty Nothing
   , _csUserListOverlay             = nullUserListOverlayState
+  , _csGenericListOverlay          = emptyGenericListOverlay
   }
 
 nullUserListOverlayState :: UserListOverlayState
@@ -648,6 +657,24 @@ data UserListOverlayState = UserListOverlayState
   , _userListRequestingMore :: Bool
   , _userListHasAllResults :: Bool
   , _userListEnterHandler :: UserInfo -> MH Bool
+  }
+
+data GenericListOverlayState = forall t. GenericListOverlayState
+  { genericListOverlayName     :: T.Text
+  , genericListOverlayList     :: List Name t
+  , genericListOverlayShow     :: t -> T.Text
+  , genericListOverlayCallback :: t -> MH ()
+  }
+
+emptyGenericListOverlay :: GenericListOverlayState
+emptyGenericListOverlay = genericListOverlay "" [] (\ _ -> "") (\ _ -> return ())
+
+genericListOverlay :: T.Text -> [t] -> (t -> T.Text) -> (t -> MH ()) -> GenericListOverlayState
+genericListOverlay name lst shw cb = GenericListOverlayState
+  { genericListOverlayName     = name
+  , genericListOverlayList     = list GenericListViewport (Vec.fromList lst) 1
+  , genericListOverlayShow     = shw
+  , genericListOverlayCallback = cb
   }
 
 data UserSearchScope =
@@ -772,6 +799,11 @@ whenMode m act = do
 
 setMode :: Mode -> MH ()
 setMode = (csMode .=)
+
+genericListMode :: T.Text -> [t] -> (t -> T.Text) -> (t -> MH ()) -> MH ()
+genericListMode name lst shw cb = do
+  csGenericListOverlay .= genericListOverlay name lst shw cb
+  csMode .= GenericListOverlay
 
 setMode' :: Mode -> ChatState -> ChatState
 setMode' m st = st & csMode .~ m
