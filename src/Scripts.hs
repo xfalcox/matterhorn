@@ -4,7 +4,6 @@ module Scripts
   )
 where
 
-import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
 import Data.Monoid ((<>))
@@ -37,17 +36,19 @@ findAndRunScript scriptName input = do
         let msg = ("No script named " <> scriptName <> " was found")
         mhError msg
 
-runScript :: STM.TChan ProgramOutput -> FilePath -> T.Text -> IO (MH ())
+runScript :: STM.TChan ProgramOutput -> FilePath -> T.Text -> IO (Maybe (MH ()))
 runScript outputChan fp text = do
   outputVar <- newEmptyMVar
   runLoggedCommand True outputChan fp [] (Just $ T.unpack text) (Just outputVar)
   po <- takeMVar outputVar
-  return $ case programExitCode po of
+  case programExitCode po of
     ExitSuccess -> do
-        when (null $ programStderr po) $ do
-            mode <- use (csEditState.cedEditMode)
-            sendMessage mode (T.pack $ programStdout po)
-    ExitFailure _ -> return ()
+        case null $ programStderr po of
+            True -> return $ Just $ do
+                mode <- use (csEditState.cedEditMode)
+                sendMessage mode (T.pack $ programStdout po)
+            False -> return Nothing
+    ExitFailure _ -> return Nothing
 
 listScripts :: MH ()
 listScripts = do

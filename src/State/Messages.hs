@@ -67,10 +67,11 @@ lastMsg = withFirstMessage id
 
 loadFlaggedMessages :: Seq.Seq Preference -> ChatState -> IO ()
 loadFlaggedMessages prefs st = doAsyncWithIO Normal st $ do
-  return $ sequence_ [ updateMessageFlag (flaggedPostId fp) True
-                     | Just fp <- F.toList (fmap preferenceToFlaggedPost prefs)
-                     , flaggedPostStatus fp
-                     ]
+  return $ Just $
+      sequence_ [ updateMessageFlag (flaggedPostId fp) True
+                | Just fp <- F.toList (fmap preferenceToFlaggedPost prefs)
+                , flaggedPostStatus fp
+                ]
 
 -- | Update the UI to reflect the flagged/unflagged state of a
 -- message. This __does not__ talk to the Mattermost server, but

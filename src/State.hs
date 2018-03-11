@@ -198,7 +198,7 @@ refreshChannelById cId = do
   doAsyncWith Preempt $ do
       cwd <- MM.mmGetChannel cId session
       member <- MM.mmGetChannelMember cId UserMe session
-      return $ refreshChannel cwd member
+      return $ Just $ refreshChannel cwd member
 
 createGroupChannel :: T.Text -> MH ()
 createGroupChannel usernameList = do
@@ -228,7 +228,7 @@ createGroupChannel usernameList = do
             MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session -- (me^.userIdL) $ Seq.fromList [pref]
             cwd <- MM.mmGetChannel (channelId chan) session
             member <- MM.mmGetChannelMember (channelId chan) UserMe session
-            return $ do
+            return $ Just $ do
                 applyPreferenceChange pref
                 handleNewChannel True cwd member
 
@@ -298,7 +298,7 @@ refreshChannelsAndUsers = do
                       }
                 batch <- MM.mmGetUsers userQuery session
 
-                return $ case length batch < pageSize of
+                return $ Just $ case length batch < pageSize of
                     True -> do
                         let users = accum <> batch
                         forM_ users $ \u -> do
@@ -310,7 +310,7 @@ refreshChannelsAndUsers = do
                     False ->
                         asyncFetchAllUsers (page + 1) (accum <> batch) final
 
-    return $ do
+    return $ Just $ do
         asyncFetchAllUsers 0 mempty $ do
             forM_ chansWithData $ uncurry refreshChannel
             lock <- use (csResources.crUserStatusLock)
@@ -325,7 +325,7 @@ refreshClientConfig = do
     session <- getSession
     doAsyncWith Preempt $ do
         cfg <- MM.mmGetClientConfiguration (Just "old") session
-        return (csClientConfig .= Just cfg)
+        return $ Just $ csClientConfig .= Just cfg
 
 -- | Websocket was disconnected, so all channels may now miss some
 -- messages
@@ -425,8 +425,9 @@ deleteSelectedMessage = do
               Just p ->
                   doAsyncChannelMM Preempt cId
                       (\s _ _ -> MM.mmDeletePost (postId p) s)
-                      (\_ _ -> do csEditState.cedEditMode .= NewPost
-                                  setMode Main)
+                      (\_ _ -> Just $ do
+                          csEditState.cedEditMode .= NewPost
+                          setMode Main)
               Nothing -> return ()
         _ -> return ()
 
@@ -459,7 +460,7 @@ flagMessage pId f = do
   doAsyncWith Normal $ do
     let doFlag = if f then MM.mmFlagPost else MM.mmUnflagPost
     doFlag myId pId session
-    return $ return ()
+    return Nothing
 
 -- | Tell the server that the message we currently have selected
 -- should have its flagged state toggled.
@@ -531,7 +532,7 @@ joinChannelByName rawName = do
     tId <- gets myTeamId
     doAsyncWith Preempt $ do
         result <- try $ MM.mmGetChannelByName tId (trimAnySigil rawName) session
-        return $ case result of
+        return $ Just $ case result of
             Left (_::SomeException) -> mhError $ T.pack $ "No such channel: " <> (show rawName)
             Right chan -> joinChannel $ getId chan
 
@@ -553,7 +554,7 @@ startJoinChannel = do
                 else loop chans (start+1)
         chans <- Seq.filter (\ c -> not (channelId c `elem` myChannels)) <$> loop mempty 0
         let sortedChans = V.fromList $ F.toList $ Seq.sortBy (compare `on` channelName) chans
-        return $ do
+        return $ Just $ do
             csJoinChannelList .= (Just $ list JoinChannelList sortedChans 2)
 
     setMode JoinChannel
@@ -574,7 +575,7 @@ handleChannelInvite cId = do
     doAsyncWith Normal $ do
         member <- MM.mmGetChannelMember cId UserMe session
         tryMM (MM.mmGetChannel cId session)
-              (\cwd -> return $ handleNewChannel False cwd member)
+              (\cwd -> return $ Just $ handleNewChannel False cwd member)
 
 addUserToCurrentChannel :: T.Text -> MH ()
 addUserToCurrentChannel uname = do
@@ -587,7 +588,7 @@ addUserToCurrentChannel uname = do
             let channelMember = MinChannelMember (u^.uiId) cId
             doAsyncWith Normal $ do
                 tryMM (void $ MM.mmAddUser cId channelMember session)
-                      (const $ return (return ()))
+                      (const $ return Nothing)
         _ -> do
             mhError ("No such user: " <> uname)
 
@@ -601,7 +602,7 @@ removeUserFromCurrentChannel uname = do
             session <- getSession
             doAsyncWith Normal $ do
                 tryMM (void $ MM.mmRemoveUserFromChannel cId (UserById $ u^.uiId) session)
-                      (const $ return (return ()))
+                      (const $ return Nothing)
         _ -> do
             mhError ("No such user: " <> uname)
 
@@ -642,7 +643,7 @@ leaveChannelIfPossible cId delete = do
                            , MM.userQueryInChannel = Just cId
                            }
                       in F.toList <$> MM.mmGetUsers query s)
-                    (\_ members -> do
+                    (\_ members -> Just $ do
                         -- If the channel is private:
                         -- * leave it if we aren't the last member.
                         -- * delete it if we are.
@@ -745,7 +746,8 @@ setLastViewedFor prevId cId = do
       doAsyncChannelMM Preempt cId (\ s _ _ ->
                                        (,) <$> MM.mmGetChannel cId s
                                            <*> MM.mmGetChannelMember cId UserMe s)
-      (\pcid (cwd, member) -> csChannel(pcid).ccInfo %= channelInfoFromChannelWithData cwd member)
+      (\pcid (cwd, member) -> Just $ do
+          csChannel(pcid).ccInfo %= channelInfoFromChannelWithData cwd member)
   -- Update the old channel's previous viewed time (allows tracking of new messages)
   case prevId of
     Nothing -> return ()
@@ -767,7 +769,7 @@ updateViewedChan cId = use csConnectionStatus >>= \case
           pId <- use csRecentChannel
           doAsyncChannelMM Preempt cId
             (\s _ c -> MM.mmViewChannel UserMe c pId s)
-            (\c () -> setLastViewedFor pId c)
+            (\c () -> Just $ setLastViewedFor pId c)
       Disconnected ->
           -- Cannot update server; make no local updates to avoid
           -- getting out-of-sync with the server.  Assumes that this
@@ -953,8 +955,9 @@ asyncFetchMoreMessages = do
                              _ -> q
         in doAsyncChannelMM Preempt cId
                (\s _ c -> MM.mmGetPostsForChannel c query s)
-               (\c p -> do addObtainedMessages c (-pageAmount) p >>= postProcessMessageAdd
-                           mh $ invalidateCacheEntry (ChannelMessages cId))
+               (\c p -> Just $ do
+                   addObtainedMessages c (-pageAmount) p >>= postProcessMessageAdd
+                   mh $ invalidateCacheEntry (ChannelMessages cId))
 
 
 addNewPostedMessage :: PostToAdd -> MH ()
@@ -1135,7 +1138,7 @@ attemptCreateDMChannel name = do
           nc <- MM.mmCreateDirectMessageChannel (uId, myId) session -- tId uId
           cwd <- MM.mmGetChannel (getId nc) session
           member <- MM.mmGetChannelMember (getId nc) UserMe session
-          return $ handleNewChannel True cwd member
+          return $ Just $ handleNewChannel True cwd member
       else
         mhError ("No channel or user named " <> name)
 
@@ -1159,7 +1162,7 @@ createOrdinaryChannel name  = do
               member <- MM.mmGetChannelMember (getId c) UserMe session
               return (chan, member)
           )
-          (return . uncurry (handleNewChannel True))
+          (return . Just . uncurry (handleNewChannel True))
 
 handleNewChannel :: Bool -> Channel -> ChannelMember -> MH ()
 handleNewChannel = handleNewChannel_ True
@@ -1232,7 +1235,7 @@ handleNewChannel_ permitPostpone switch nc member = do
                                 True -> do
                                     handleNewUsers $ Seq.singleton otherUserId
                                     doAsyncWith Normal $
-                                        return $ handleNewChannel_ False switch nc member
+                                        return $ Just $ handleNewChannel_ False switch nc member
                                     return Nothing
                         Just ncUsername ->
                             return $ Just $ ncUsername
@@ -1360,8 +1363,8 @@ addMessageToState newPostData = do
               -- If the channel has been archived, we don't want to post
               -- this message or add the channel to the state.
               case channelDeleted nc of
-                  True -> return $ return ()
-                  False -> return $ do
+                  True -> return Nothing
+                  False -> return $ Just $ do
                       -- If the incoming message is for a group channel
                       -- we don't know about, that's because it was
                       -- previously hidden by the user. We need to
@@ -1413,7 +1416,7 @@ addMessageToState newPostData = do
                               Nothing -> do
                                   doAsyncChannelMM Preempt cId
                                       (\s _ _ -> MM.mmGetThread parentId s)
-                                      (\_ p -> do
+                                      (\_ p -> Just $ do
                                           let postMap = HM.fromList [ ( pId
                                                                       , clientPostToMessage
                                                                         (toClientPost x (x^.postParentIdL))
@@ -1484,8 +1487,9 @@ fetchVisibleIfNeeded = do
            in when ((not $ chan^.ccContents.cdFetchPending) && gapInDisplayable) $ do
                      csChannel(cId).ccContents.cdFetchPending .= True
                      doAsyncChannelMM Preempt cId op
-                         (\c p -> do addObtainedMessages c (-numToReq) p >>= postProcessMessageAdd
-                                     csChannel(c).ccContents.cdFetchPending .= False)
+                         (\c p -> Just $ do
+                             addObtainedMessages c (-numToReq) p >>= postProcessMessageAdd
+                             csChannel(c).ccContents.cdFetchPending .= False)
 
     _ -> return ()
 
@@ -1495,7 +1499,7 @@ setChannelTopic msg = do
     let patch = defaultChannelPatch { channelPatchHeader = Just msg }
     doAsyncChannelMM Preempt cId
         (\s _ _ -> MM.mmPatchChannel cId patch s)
-        (\_ _ -> return ())
+        (\_ _ -> Nothing)
 
 channelHistoryForward :: MH ()
 channelHistoryForward = do
@@ -1769,7 +1773,7 @@ openURL link = do
                         args <- act
                         runLoggedCommand False outputChan (T.unpack urlOpenCommand)
                                          args Nothing Nothing
-                        return $ return ()
+                        return Nothing
                 True -> do
                     -- If there isn't a new message cutoff showing in
                     -- the current channel, set one. This way, while the
@@ -1929,8 +1933,9 @@ handleNewUsers newUserIds = doAsyncMM Preempt getUserInfo addNewUsers
                      usrList = F.toList nUsers
                  return $ usrInfo <$> usrList
 
-          addNewUsers :: [UserInfo] -> MH ()
-          addNewUsers = mapM_ addNewUser
+          addNewUsers :: [UserInfo] -> Maybe (MH ())
+          addNewUsers [] = Nothing
+          addNewUsers us = Just $ mapM_ addNewUser us
 
 -- | Handle the typing events from the websocket to show the currently typing users on UI
 handleTypingUser :: UserId -> ChannelId -> MH ()

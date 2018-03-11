@@ -33,14 +33,14 @@ import           Types.Messages
 --   message if it fails with a 'MattermostServerError'.
 tryMM :: IO a
       -- ^ The action to try (usually a MM API call)
-      -> (a -> IO (MH ()))
+      -> (a -> IO (Maybe (MH ())))
       -- ^ What to do on success
-      -> IO (MH ())
+      -> IO (Maybe (MH ()))
 tryMM act onSuccess = do
     result <- liftIO $ try act
     case result of
         Left (MattermostError { mattermostErrorMessage = msg }) ->
-          return $ mhError msg
+          return $ Just $ mhError msg
         Right value -> liftIO $ onSuccess value
 
 -- * Background Computation
@@ -100,11 +100,11 @@ data AsyncPriority = Preempt | Normal
 
 -- | Run a computation in the background, ignoring any results from it.
 doAsync :: AsyncPriority -> IO () -> MH ()
-doAsync prio act = doAsyncWith prio (act >> return (return ()))
+doAsync prio act = doAsyncWith prio (act >> return Nothing)
 
 -- | Run a computation in the background, returning a computation to be
 -- called on the 'ChatState' value.
-doAsyncWith :: AsyncPriority -> IO (MH ()) -> MH ()
+doAsyncWith :: AsyncPriority -> IO (Maybe (MH ())) -> MH ()
 doAsyncWith prio act = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
@@ -114,11 +114,11 @@ doAsyncWith prio act = do
 
 doAsyncIO :: AsyncPriority -> ChatState -> IO () -> IO ()
 doAsyncIO prio st act =
-  doAsyncWithIO prio st (act >> return (return ()))
+  doAsyncWithIO prio st (act >> return Nothing)
 
 -- | Run a computation in the background, returning a computation to be
 -- called on the 'ChatState' value.
-doAsyncWithIO :: AsyncPriority -> ChatState -> IO (MH ()) -> IO ()
+doAsyncWithIO :: AsyncPriority -> ChatState -> IO (Maybe (MH ())) -> IO ()
 doAsyncWithIO prio st act = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
@@ -133,7 +133,7 @@ doAsyncMM :: AsyncPriority
           -- ^ the priority for this async operation
           -> (Session -> TeamId -> IO a)
           -- ^ the async MM channel-based IO operation
-          -> (a -> MH ())
+          -> (a -> Maybe (MH ()))
           -- ^ function to process the results in brick event handling
           -- context
           -> MH ()
@@ -153,7 +153,7 @@ type DoAsyncChannelMM a =
     -- ^ The channel
     -> (Session -> TeamId -> ChannelId -> IO a)
     -- ^ the asynchronous Mattermost channel-based IO operation
-    -> (ChannelId -> a -> MH ())
+    -> (ChannelId -> a -> Maybe (MH ()))
     -- ^ function to process the results in brick event handling context
     -> MH ()
 
@@ -166,8 +166,8 @@ doAsyncChannelMM prio cId mmOp eventHandler =
 
 -- | Use this convenience function if no operation needs to be
 -- performed in the MH state after an async operation completes.
-endAsyncNOP :: ChannelId -> a -> MH ()
-endAsyncNOP _ _ = return ()
+endAsyncNOP :: ChannelId -> a -> Maybe (MH ())
+endAsyncNOP _ _ = Nothing
 
 -- * Client Messages
 
@@ -220,7 +220,7 @@ asyncFetchAttachments p = do
           | m^.mPostId == Just pId =
             m & mAttachments %~ (addIfMissing attachment)
           | otherwise              = m
-    return $
+    return $ Just $
       csChannel(cId).ccContents.cdMessages.traversed %= addAttachment
 
 -- | Add a 'ClientMessage' to the current channel's message list
@@ -235,14 +235,14 @@ addClientMessage msg = do
 postInfoMessage :: T.Text -> MH ()
 postInfoMessage err = do
     msg <- newClientMessage Informative err
-    doAsyncWith Normal (return $ addClientMessage msg)
+    doAsyncWith Normal $ return $ Just $ addClientMessage msg
 
 -- | Add a new 'ClientMessage' representing an error message to
 --   the current channel's message list
 postErrorMessage' :: T.Text -> MH ()
 postErrorMessage' err = do
     msg <- newClientMessage Error err
-    doAsyncWith Normal (return $ addClientMessage msg)
+    doAsyncWith Normal $ return $ Just $ addClientMessage msg
 
 -- | Raise a rich error
 mhError :: T.Text -> MH ()
@@ -264,7 +264,7 @@ asyncFetchReactionsForPost cId p
   | not (p^.postHasReactionsL) = return ()
   | otherwise = doAsyncChannelMM Normal cId
         (\s _ _ -> fmap F.toList (mmGetReactionsForPost (p^.postIdL) s))
-        addReactions
+        (\i rs -> Just $ addReactions i rs)
 
 addReactions :: ChannelId -> [Reaction] -> MH ()
 addReactions cId rs = csChannel(cId).ccContents.cdMessages %= fmap upd

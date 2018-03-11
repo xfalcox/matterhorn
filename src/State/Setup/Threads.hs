@@ -45,7 +45,7 @@ import           Types
 import           Types.Users
 import           Types.Channels
 
-updateUserStatuses :: STM.TVar (Seq.Seq UserId) -> MVar () -> Session -> IO (MH ())
+updateUserStatuses :: STM.TVar (Seq.Seq UserId) -> MVar () -> Session -> IO (Maybe (MH ()))
 updateUserStatuses usersVar lock session = do
   lockResult <- tryTakeMVar lock
   users <- STM.atomically $ STM.readTVar usersVar
@@ -53,11 +53,11 @@ updateUserStatuses usersVar lock session = do
   case lockResult of
       Just () | not (F.null users) -> do
           statuses <- mmGetUserStatusByIds users session `finally` putMVar lock ()
-          return $ do
+          return $ Just $ do
               forM_ statuses $ \s ->
                   setUserStatus (statusUserId s) (statusStatus s)
-      Just () -> putMVar lock () >> return (return ())
-      _ -> return $ return ()
+      Just () -> putMVar lock () >> return Nothing
+      _ -> return Nothing
 
 startUserRefreshThread :: STM.TVar (Seq.Seq UserId) -> MVar () -> Session -> RequestChan -> IO ()
 startUserRefreshThread usersVar lock session requestChan = void $ forkIO $ forever refresh
@@ -68,7 +68,7 @@ startUserRefreshThread usersVar lock session requestChan = void $ forkIO $ forev
           STM.atomically $ STM.writeTChan requestChan $ do
             rs <- try $ updateUserStatuses usersVar lock session
             case rs of
-              Left (_ :: SomeException) -> return (return ())
+              Left (_ :: SomeException) -> return Nothing
               Right upd -> return upd
           threadDelay (seconds userRefreshInterval)
 
@@ -80,7 +80,7 @@ startTypingUsersRefreshThread requestChan = void $ forkIO $ forever refresh
     seconds = (* (1000 * 1000))
     refreshIntervalMicros = ceiling $ seconds $ userTypingExpiryInterval / 2
     refresh = do
-      STM.atomically $ STM.writeTChan requestChan $ return $ do
+      STM.atomically $ STM.writeTChan requestChan $ return $ Just $ do
         now <- liftIO getCurrentTime
         let expiry = addUTCTime (- userTypingExpiryInterval) now
         let expireUsers c = c & ccInfo.cdTypingUsers %~ expireTypingUsers expiry
@@ -121,7 +121,7 @@ startSubprocessLoggerThread logChan requestChan = do
                   hFlush logHandle
 
                   STM.atomically $ STM.writeTChan requestChan $ do
-                      return $ do
+                      return $ Just $ do
                           let msg = T.pack $
                                 "An error occurred when running " <> show progName <>
                                 "; see " <> logPath <> " for details."
@@ -143,7 +143,7 @@ startTimezoneMonitorThread tz requestChan = do
         newTz <- lookupLocalTimeZone
         when (newTz /= prevTz) $
             STM.atomically $ STM.writeTChan requestChan $ do
-                return $ timeZone .= newTz
+                return $ Just $ timeZone .= newTz
 
         timezoneMonitor newTz
 
@@ -241,13 +241,13 @@ startSpellCheckerThread eventChan spellCheckTimeout = do
 -------------------------------------------------------------------
 -- Async worker thread
 
-startAsyncWorkerThread :: Config -> STM.TChan (IO (MH ())) -> BChan MHEvent -> IO ()
+startAsyncWorkerThread :: Config -> STM.TChan (IO (Maybe (MH ()))) -> BChan MHEvent -> IO ()
 startAsyncWorkerThread c r e = void $ forkIO $ asyncWorker c r e
 
-asyncWorker :: Config -> STM.TChan (IO (MH ())) -> BChan MHEvent -> IO ()
+asyncWorker :: Config -> STM.TChan (IO (Maybe (MH ()))) -> BChan MHEvent -> IO ()
 asyncWorker c r e = forever $ doAsyncWork c r e
 
-doAsyncWork :: Config -> STM.TChan (IO (MH ())) -> BChan MHEvent -> IO ()
+doAsyncWork :: Config -> STM.TChan (IO (Maybe (MH ()))) -> BChan MHEvent -> IO ()
 doAsyncWork config requestChan eventChan = do
     startWork <- case configShowBackground config of
         Disabled -> return $ return ()
@@ -274,9 +274,10 @@ doAsyncWork config requestChan eventChan = do
     startWork
     res <- try req
     case res of
-      Left e    -> when (not $ shouldIgnore e) $
-                   writeBChan eventChan (AsyncErrEvent e)
-      Right upd -> writeBChan eventChan (RespEvent upd)
+      Left e -> when (not $ shouldIgnore e) $
+                writeBChan eventChan (AsyncErrEvent e)
+      Right Nothing -> return ()
+      Right (Just upd) -> writeBChan eventChan (RespEvent upd)
 
 -- Filter for exceptions that we don't want to report to the user,
 -- probably because they are not actionable and/or contain no useful

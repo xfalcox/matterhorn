@@ -252,7 +252,7 @@ requestSpellCheck = do
                             allMistakes = S.fromList $ concat $ getMistakes <$> responses
                         csEditState.cedMisspellings .= allMistakes
 
-                tryMM query (return . postMistakes)
+                tryMM query (return . Just . postMistakes)
 
 editorEmpty :: Editor T.Text a -> Bool
 editorEmpty e = cursorIsAtEnd e &&
