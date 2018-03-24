@@ -26,7 +26,6 @@ import qualified Data.Text as T
 import           Data.Maybe (catMaybes)
 import           Data.Monoid ((<>))
 import           Data.Time (getCurrentTime, addUTCTime)
-import           Data.Time.LocalTime.TimeZone.Series (TimeZoneSeries)
 import           Lens.Micro.Platform
 import           System.Exit (ExitCode(ExitSuccess))
 import           System.IO (hPutStrLn, hFlush)
