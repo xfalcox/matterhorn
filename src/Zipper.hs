@@ -17,12 +17,14 @@ where
 
 import Prelude ()
 import Prelude.Compat
+import qualified Data.Foldable as F
+import qualified Data.Sequence as Seq
 
 import Lens.Micro.Platform (Lens, lens, ix, (&), (.~))
 
 data Zipper a = Zipper
   { zFocus :: Int
-  , zElems :: [a]
+  , zElems :: Seq.Seq a
   }
 
 -- Move the focus one element to the left
@@ -43,7 +45,7 @@ rightL = lens right (\ _ b -> left b)
 
 -- Return the focus element
 focus :: Zipper a -> a
-focus z = zElems z !! zFocus z
+focus z = zElems z `Seq.index` zFocus z
 
 -- A lens to return the focus element
 focusL :: Lens (Zipper a) (Zipper a) a a
@@ -52,10 +54,10 @@ focusL = lens focus upd
 
 -- Turn a list into a wraparound zipper, focusing on the head
 fromList :: [a] -> Zipper a
-fromList xs = Zipper { zFocus = 0, zElems = xs }
+fromList xs = Zipper { zFocus = 0, zElems = Seq.fromList xs }
 
 toList :: Zipper a -> [a]
-toList = zElems
+toList = F.toList . zElems
 
 -- Shift the focus until a given element is found, or return the
 -- same zipper if none applies
@@ -82,9 +84,9 @@ findLeft f z
 updateList :: (Eq a) => [a] -> Zipper a -> Zipper a
 updateList newList oldZip = findLeft (== oldFocus) newZip
   where oldFocus = focus oldZip
-        newZip   = oldZip { zElems = newList }
+        newZip   = oldZip { zElems = Seq.fromList newList }
 
 filterZipper :: (Eq a) => (a -> Bool) -> Zipper a -> Zipper a
 filterZipper f oldZip = findLeft (== oldFocus) newZip
   where oldFocus = focus oldZip
-        newZip   = oldZip { zElems = filter f $ zElems oldZip }
+        newZip   = oldZip { zElems = Seq.filter f $ zElems oldZip }
