@@ -23,7 +23,6 @@ import           Brick.Widgets.Border
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as F
 import qualified Data.HashMap.Strict as HM
-import           Data.Maybe (fromMaybe)
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
 import           Draw.Util
@@ -230,20 +229,19 @@ getDmChannels st height =
     let es = Seq.fromList
              [ ChannelListEntry (T.cons sigil " ") uname unread
                                 mentions recent current (Just $ u^.uiStatus)
-             | u <- sortedVisibleUserList st
+             | (u, cId, _) <- sortedVisibleUserList st
              , let sigil =
-                     case do { cId <- m_chanId; st^.csEditState.cedLastChannelInput.at cId } of
+                     case do st^.csEditState.cedLastChannelInput.at cId of
                        Nothing      -> userSigilFromInfo u
                        Just ("", _) -> userSigilFromInfo u
                        _            -> '»'  -- shows that user has a message in-progress
                    uname = if useNickname st
                            then u^.uiNickName.non (u^.uiName)
                            else u^.uiName
-                   recent = maybe False (isRecentChannel st) m_chanId
-                   m_chanId = channelIdByName (u^.uiName) st
-                   unread = maybe False (hasUnread st) m_chanId
-                   current = maybe False (isCurrentChannel st) m_chanId
-                   mentions = fromMaybe 0 $ channelMentionCount <$> m_chanId <*> pure st
+                   recent = isRecentChannel st cId
+                   unread = hasUnread st cId
+                   current = isCurrentChannel st cId
+                   mentions = channelMentionCount cId st
                 ]
         (h, t) = Seq.breakl entryIsCurrent es
     in case height of

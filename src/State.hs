@@ -1606,7 +1606,7 @@ updateChannelSelectMatches = do
     uList       <- use (to sortedVisibleUserList)
     displayNick <- use (to useNickname)
     let chanMatches = catMaybes (fmap chanNameMatches chanNames)
-        displayName uInf
+        displayName (uInf, _, _)
             | displayNick = uInf^.uiNickName.non (uInf^.uiName)
             | otherwise   = uInf^.uiName
         usernameMatches = catMaybes (fmap (chanNameMatches . displayName) uList)

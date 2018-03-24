@@ -325,19 +325,8 @@ makeLenses ''MMNames
 
 -- ** 'MMNames' functions
 
-mkChannelZipperList :: MMNames -> [ChannelId]
-mkChannelZipperList chanNames =
-  getChannelIdsInOrder chanNames ++
-  getDMChannelIdsInOrder chanNames
-
 getChannelIdsInOrder :: MMNames -> [ChannelId]
 getChannelIdsInOrder n = [ (n ^. cnToChanId) HM.! i | i <- n ^. cnChans ]
-
-getDMChannelIdsInOrder :: MMNames -> [ChannelId]
-getDMChannelIdsInOrder n =
-  [ c | i <- n ^. cnUsers
-      , c <- maybeToList (HM.lookup i (n ^. cnToChanId))
-  ]
 
 -- * Internal Names and References
 
@@ -811,6 +800,16 @@ makeLenses ''UserListOverlayState
 makeLenses ''ChannelSelectState
 makeLenses ''UserPreferences
 
+mkChannelZipperList :: ChatState -> [ChannelId]
+mkChannelZipperList st =
+  getChannelIdsInOrder (st^.csNames) ++
+  getVisibleUserDmChannelIdsInOrder st
+
+getVisibleUserDmChannelIdsInOrder :: ChatState -> [ChannelId]
+getVisibleUserDmChannelIdsInOrder =
+    let snd3 (_, b, _) = b
+    in fmap snd3 . sortedVisibleUserList
+
 getSession :: MH Session
 getSession = use (csResources.crSession)
 
@@ -980,8 +979,8 @@ removeChannelName name = do
 -- Rebuild the channel zipper contents from the current names collection.
 refreshChannelZipper :: MH ()
 refreshChannelZipper = do
-    names <- use csNames
-    let newZip = updateList (mkChannelZipperList names)
+    st <- use id
+    let newZip = updateList (mkChannelZipperList st)
     csFocus %= newZip
 
 clientPostToMessage :: ClientPost -> Message
@@ -1083,8 +1082,8 @@ userByUsername name st = do
     uId <- userIdForUsername name st
     userById uId st
 
-sortedVisibleUserList :: ChatState -> [UserInfo]
-sortedVisibleUserList st = fst3 <$> (sortBy cmp yes <> sortBy cmp no)
+sortedVisibleUserList :: ChatState -> [(UserInfo, ChannelId, ClientChannel)]
+sortedVisibleUserList st = (sortBy cmp yes <> sortBy cmp no)
   where
       fst3 (a, _, _) = a
       cmp a b = compareUserInfo uiName (fst3 a) (fst3 b)
