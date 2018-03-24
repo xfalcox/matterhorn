@@ -18,6 +18,7 @@ import qualified Data.Foldable as F
 import           Data.Maybe (listToMaybe, fromMaybe, fromJust, isNothing)
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
+import           Data.Time.Clock (getCurrentTime)
 import           Lens.Micro.Platform
 import           System.Exit (exitFailure)
 import           System.FilePath ((</>), isRelative, dropFileName)
@@ -201,7 +202,6 @@ initializeState cr myTeam me = do
       cChannel <- makeClientChannel c
       return (getId c, cChannel)
 
-  tz    <- lookupLocalTimeZone
   hist  <- do
       result <- readHistory
       case result of
@@ -222,7 +222,7 @@ initializeState cr myTeam me = do
     startTypingUsersRefreshThread requestChan
 
   -- * Timezone change monitor
-  startTimezoneMonitorThread tz requestChan
+  startTimezoneMonitorThread requestChan
 
   -- * Subprocess logger
   startSubprocessLoggerThread (cr^.crSubprocessLog) requestChan
@@ -232,6 +232,8 @@ initializeState cr myTeam me = do
 
   -- End thread startup ----------------------------------------------
 
+  now <- getCurrentTime
+  tz <- lookupLocalTimeZone
   let names = mkNames me mempty chans
       chanIds = getChannelIdsInOrder names
       chanZip = Z.fromList chanIds
@@ -244,6 +246,7 @@ initializeState cr myTeam me = do
                            , startupStateInitialHistory = hist
                            , startupStateSpellChecker   = spResult
                            , startupStateNames          = names
+                           , startupTime                = now
                            }
       st = newState startupState
              & csChannels %~ flip (foldr (uncurry addChannel)) msgs

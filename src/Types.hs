@@ -74,6 +74,7 @@ module Types
   , csEditState
   , csClientConfig
   , timeZone
+  , currentTime
   , whenMode
   , setMode
   , setMode'
@@ -589,6 +590,7 @@ data ChatState = ChatState
   , _csPostMap                     :: HashMap PostId Message
   , _csUsers                       :: Users
   , _timeZone                      :: TimeZoneSeries
+  , _currentTime                   :: UTCTime
   , _csEditState                   :: ChatEditState
   , _csMode                        :: Mode
   , _csShowMessagePreview          :: Bool
@@ -613,10 +615,11 @@ data StartupStateInfo =
                      , startupStateInitialHistory :: InputHistory
                      , startupStateSpellChecker   :: Maybe (Aspell, IO ())
                      , startupStateNames          :: MMNames
+                     , startupTime                :: UTCTime
                      }
 
 newState :: StartupStateInfo -> ChatState
-newState (StartupStateInfo rs i u m tz hist sp ns) = ChatState
+newState (StartupStateInfo rs i u m tz hist sp ns now) = ChatState
   { _csResources                   = rs
   , _csFocus                       = i
   , _csMe                          = u
@@ -626,6 +629,7 @@ newState (StartupStateInfo rs i u m tz hist sp ns) = ChatState
   , _csPostMap                     = HM.empty
   , _csUsers                       = noUsers
   , _timeZone                      = tz
+  , _currentTime                   = now
   , _csEditState                   = emptyEditState hist sp
   , _csMode                        = Main
   , _csShowMessagePreview          = configShowMessagePreview $ _crConfiguration rs

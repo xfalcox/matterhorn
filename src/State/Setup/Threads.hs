@@ -131,23 +131,23 @@ startSubprocessLoggerThread logChan requestChan = do
 
     void $ forkIO $ logMonitor Nothing
 
-startTimezoneMonitorThread :: TimeZoneSeries -> RequestChan -> IO ()
-startTimezoneMonitorThread tz requestChan = do
+startTimezoneMonitorThread :: RequestChan -> IO ()
+startTimezoneMonitorThread requestChan = do
   -- Start the timezone monitor thread
   let timezoneMonitorSleepInterval = minutes 5
       minutes = (* (seconds 60))
       seconds = (* (1000 * 1000))
-      timezoneMonitor prevTz = do
+      timezoneMonitor = do
         threadDelay timezoneMonitorSleepInterval
 
-        newTz <- lookupLocalTimeZone
-        when (newTz /= prevTz) $
-            STM.atomically $ STM.writeTChan requestChan $ do
-                return $ timeZone .= newTz
+        tz <- lookupLocalTimeZone
+        now <- getCurrentTime
+        STM.atomically $ STM.writeTChan requestChan $ do
+            return $ do
+                timeZone .= tz
+                currentTime .= now
 
-        timezoneMonitor newTz
-
-  void $ forkIO (timezoneMonitor tz)
+  void $ forkIO $ forever timezoneMonitor
 
 maybeStartSpellChecker :: Config -> BChan MHEvent -> IO (Maybe (Aspell, IO ()))
 maybeStartSpellChecker config eventQueue = do
