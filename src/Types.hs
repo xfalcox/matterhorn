@@ -171,9 +171,9 @@ module Types
   , channelByName
   , userById
   , allUserIds
+  , allUserInfos
   , allChannelNames
   , allUsernames
-  , sortedUserList
   , sortedVisibleUserList
   , removeChannelName
   , addChannelName
@@ -1056,6 +1056,9 @@ userList st = filter showUser $ allUsers (st^.csUsers)
 allUserIds :: ChatState -> [UserId]
 allUserIds st = getAllUserIds $ st^.csUsers
 
+allUserInfos :: ChatState -> [UserInfo]
+allUserInfos st = allUsers $ st^.csUsers
+
 userById :: UserId -> ChatState -> Maybe UserInfo
 userById uId st = findUserById uId (st^.csUsers)
 
@@ -1125,18 +1128,6 @@ userShouldBeVisible u chan now =
              -- days (subject to clock sync error)
            , maybe False (\t -> (diffUTCTime now $ withServerTime t) < threshold) (chan^.ccInfo.cdViewed)
            ]
-
-sortedUserList :: ChatState -> [UserInfo]
-sortedUserList st = sortBy cmp yes <> sortBy cmp no
-  where
-      cmp = compareUserInfo uiName
-      dmHasUnread u =
-          case st^.csNames.cnToChanId.at(u^.uiName) of
-            Nothing  -> False
-            Just cId
-              | (st^.csCurrentChannelId) == cId -> False
-              | otherwise -> hasUnread st cId
-      (yes, no) = partition dmHasUnread (filter (not . _uiDeleted) $ userList st)
 
 compareUserInfo :: (Ord a) => Lens' UserInfo a -> UserInfo -> UserInfo -> Ordering
 compareUserInfo field u1 u2

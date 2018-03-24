@@ -1107,7 +1107,7 @@ attemptCreateDMChannel name = do
   mCid <- gets (channelIdByName name)
   me <- gets myUser
   displayNick <- use (to useNickname)
-  uList       <- use (to sortedUserList)
+  uList       <- gets allUserInfos
   let myName = if displayNick && not (T.null $ userNickname me)
                then userNickname me
                else me^.userUsernameL
