@@ -980,9 +980,6 @@ removeChannelName name = do
 -- Rebuild the channel zipper contents from the current names collection.
 refreshChannelZipper :: MH ()
 refreshChannelZipper = do
-    -- We should figure out how to do this better: this adds it to the
-    -- channel zipper in such a way that we don't ever change our focus
-    -- to something else, which is kind of silly
     names <- use csNames
     let newZip = updateList (mkChannelZipperList names)
     csFocus %= newZip
