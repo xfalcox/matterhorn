@@ -1120,9 +1120,10 @@ userShouldBeVisible u chan now =
     let threshold = fromIntegral ((7 * 24 * 60 * 60) :: Integer)
     in and [ -- The user must be active
              not $ u^.uiDeleted
-             -- The channel must have been viewed within the last seven
-             -- days (subject to clock sync error)
-           , maybe False (\t -> (diffUTCTime now $ withServerTime t) < threshold) (chan^.ccInfo.cdViewed)
+             -- The channel must have been created or viewed within the
+             -- last seven days (subject to clock sync error).
+           , (maybe False (\t -> (diffUTCTime now $ withServerTime t) < threshold) (chan^.ccInfo.cdViewed)) ||
+             (diffUTCTime now (withServerTime $ chan^.ccInfo.cdCreated) < threshold)
            ]
 
 compareUserInfo :: (Ord a) => Lens' UserInfo a -> UserInfo -> UserInfo -> Ordering
