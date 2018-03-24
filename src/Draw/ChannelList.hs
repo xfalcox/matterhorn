@@ -108,7 +108,7 @@ renderChannelList st =
                 (n, F.foldr (addSelectedChannel m) mempty $ f st Nothing)
             addSelectedChannel m e s =
                 case HM.lookup (entryLabel e) (st^.m) of
-                    Just y -> SCLE e y Seq.<| s
+                    Just y -> SelectedChannelListEntry e y Seq.<| s
                     Nothing -> s
 
         render $ maybeViewport $ vBox $ vBox <$>
@@ -138,7 +138,8 @@ data ChannelListEntry =
 
 -- | Similar to the ChannelListEntry, but also holds information about
 -- the matching channel select specification.
-data SelectedChannelListEntry = SCLE ChannelListEntry ChannelSelectMatch
+data SelectedChannelListEntry =
+    SelectedChannelListEntry ChannelListEntry ChannelSelectMatch
 
 -- | Render an individual Channel List entry (in Normal mode) with
 -- appropriate visual decorations.
@@ -170,7 +171,7 @@ renderChannelListEntry entry =
 -- highlighting the matching portion, or completely suppressing the
 -- entry if it doesn't match.
 renderChannelSelectListEntry :: T.Text -> SelectedChannelListEntry -> Widget Name
-renderChannelSelectListEntry selMatch (SCLE entry match) =
+renderChannelSelectListEntry selMatch (SelectedChannelListEntry entry match) =
     let ChannelSelectMatch preMatch inMatch postMatch = match
         fullName = channelNameFromMatch match
         maybeSelect = if fullName == selMatch
