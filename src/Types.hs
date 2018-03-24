@@ -1121,7 +1121,7 @@ userShouldBeVisible u chan now =
     in and [ -- The user must be active
              not $ u^.uiDeleted
              -- The channel must have been created or viewed within the
-             -- last seven days (subject to clock sync error).
+             -- threshold (subject to clock sync error).
            , (maybe False (\t -> (diffUTCTime now $ withServerTime t) < threshold) (chan^.ccInfo.cdViewed)) ||
              (diffUTCTime now (withServerTime $ chan^.ccInfo.cdCreated) < threshold)
            ]
