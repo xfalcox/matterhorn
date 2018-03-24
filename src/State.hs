@@ -1603,7 +1603,7 @@ updateChannelSelectMatches = do
     -- user matches and then update the match lists.
     chanNameMatches <- use (csChannelSelectState.channelSelectInput.to channelNameMatch)
     chanNames   <- gets allChannelNames
-    uList       <- use (to sortedUserList)
+    uList       <- use (to sortedVisibleUserList)
     displayNick <- use (to useNickname)
     let chanMatches = catMaybes (fmap chanNameMatches chanNames)
         displayName uInf

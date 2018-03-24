@@ -174,6 +174,7 @@ module Types
   , allChannelNames
   , allUsernames
   , sortedUserList
+  , sortedVisibleUserList
   , removeChannelName
   , addChannelName
   , addNewUser
@@ -214,6 +215,7 @@ import qualified Data.Sequence as Seq
 import qualified Data.Vector as Vec
 import           Data.HashMap.Strict (HashMap)
 import           Data.Time (UTCTime)
+import           Data.Time.Clock (diffUTCTime)
 import           Data.Time.LocalTime.TimeZone.Series (TimeZoneSeries)
 import qualified Data.HashMap.Strict as HM
 import           Data.List (sort, partition, sortBy)
@@ -1038,6 +1040,10 @@ commandName (Cmd name _ _ _ ) = name
 hasUnread :: ChatState -> ChannelId -> Bool
 hasUnread st cId = maybe False id $ do
   chan <- findChannelById cId (st^.csChannels)
+  return $ channelHasUnread chan
+
+channelHasUnread :: ClientChannel -> Bool
+channelHasUnread chan = maybe False id $ do
   lastViewTime <- chan^.ccInfo.cdViewed
   return $ (chan^.ccInfo.cdUpdated > lastViewTime) ||
            (isJust $ chan^.ccInfo.cdEditedMessageThreshold)
@@ -1076,6 +1082,49 @@ userByUsername :: T.Text -> ChatState -> Maybe UserInfo
 userByUsername name st = do
     uId <- userIdForUsername name st
     userById uId st
+
+sortedVisibleUserList :: ChatState -> [UserInfo]
+sortedVisibleUserList st = fst3 <$> (sortBy cmp yes <> sortBy cmp no)
+  where
+      fst3 (a, _, _) = a
+      cmp a b = compareUserInfo uiName (fst3 a) (fst3 b)
+      shouldShow (u, _, chan) = userShouldBeVisible u chan (st^.currentTime)
+      dmHasUnread (_, cId, chan)
+          | (st^.csCurrentChannelId) == cId = False
+          | otherwise = channelHasUnread chan
+
+      (yes, no) = partition dmHasUnread (filter shouldShow usersWithChannels)
+      usersWithChannels = catMaybes $ flip map (userList st) $ \u -> do
+          cId <- st^.csNames.cnToChanId.at(u^.uiName)
+          chan <- st ^? csChannel(cId)
+          return (u, cId, chan)
+
+-- | This function determines whether a user should be present in the
+-- sidebar. This is determined by looking at the user metadata and the
+-- metadata associated with the direct message channel for that user.
+-- Consequently we implicitly only ever show users that *have* a direct
+-- message channel at all.
+--
+-- When deciding whether to show the user based on channel metadata, we
+-- need to look at how recently the channel was viewed or modified.
+-- To do that we need to compare to the local system clock. Although
+-- in general we avoid comparing the local clock to any timestamps in
+-- server data, in this case we allow it because although the clocks
+-- are not guaranteed to be even remotely synchrononized, since we are
+-- looking for evidence that the DM channel is *very* inactive and use
+-- a very coarse threshold (many days), we can permit the clocks to be
+-- seconds, minutes, or even hours off of each other since it's unlikely
+-- to ever really matter.
+userShouldBeVisible :: UserInfo -> ClientChannel -> UTCTime -> Bool
+userShouldBeVisible u chan now =
+    -- 7 day threshold, in seconds
+    let threshold = fromIntegral ((7 * 24 * 60 * 60) :: Integer)
+    in and [ -- The user must be active
+             not $ u^.uiDeleted
+             -- The channel must have been viewed within the last seven
+             -- days (subject to clock sync error)
+           , maybe False (\t -> (diffUTCTime now $ withServerTime t) < threshold) (chan^.ccInfo.cdViewed)
+           ]
 
 sortedUserList :: ChatState -> [UserInfo]
 sortedUserList st = sortBy cmp yes <> sortBy cmp no

@@ -230,7 +230,7 @@ getDmChannels st height =
     let es = Seq.fromList
              [ ChannelListEntry (T.cons sigil " ") uname unread
                                 mentions recent current (Just $ u^.uiStatus)
-             | u <- sortedUserList st
+             | u <- sortedVisibleUserList st
              , let sigil =
                      case do { cId <- m_chanId; st^.csEditState.cedLastChannelInput.at cId } of
                        Nothing      -> userSigilFromInfo u
