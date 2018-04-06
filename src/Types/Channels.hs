@@ -25,6 +25,7 @@ module Types.Channels
   , channelByIdL, maybeChannelByIdL
   , filteredChannelIds
   , filteredChannels
+  , foreachChannel
   -- * Creating ChannelInfo objects
   , channelInfoFromChannelWithData
   -- * Channel State management
@@ -253,6 +254,9 @@ filteredChannels :: ((ChannelId, ClientChannel) -> Bool)
                  -> ClientChannels -> ClientChannels
 filteredChannels f cc =
     AllChannels . HM.fromList . filter f $ cc^.ofChans.to HM.toList
+
+foreachChannel :: (Monad m) => ClientChannels -> (ChannelId -> ClientChannel -> m ()) -> m ()
+foreachChannel cc f = mapM_ (uncurry f) $ HM.toList (cc^.ofChans)
 
 ------------------------------------------------------------------------
 

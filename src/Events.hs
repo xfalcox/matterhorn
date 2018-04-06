@@ -10,7 +10,7 @@ import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Graphics.Vty as Vty
-import           Lens.Micro.Platform ((.=))
+import           Lens.Micro.Platform ((.=), (%=))
 
 import           Network.Mattermost.Types
 import           Network.Mattermost.Lenses
@@ -37,7 +37,7 @@ import           Events.PostListOverlay
 import           Events.UserListOverlay
 
 onEvent :: ChatState -> BrickEvent Name MHEvent -> EventM Name (Next ChatState)
-onEvent st ev = runMHEvent st (onEv >> fetchVisibleIfNeeded)
+onEvent st ev = runMHEvent st (onEv >> fetchVisibleIfNeeded >> invalidateDirtyChannels)
     where onEv = do case ev of
                       (AppEvent e) -> onAppEvent e
                       (VtyEvent (Vty.EvKey (Vty.KChar 'l') [Vty.MCtrl])) -> do
@@ -45,6 +45,14 @@ onEvent st ev = runMHEvent st (onEv >> fetchVisibleIfNeeded)
                            liftIO $ Vty.refresh vty
                       (VtyEvent e) -> onVtyEvent e
                       _ -> return ()
+
+invalidateDirtyChannels :: MH ()
+invalidateDirtyChannels = do
+    cs <- use csChannels
+    foreachChannel cs $ \cId chan ->
+        when (channelIsDirty chan) $ do
+            mh $ invalidateCacheEntry $ ChannelMessages cId
+            csChannel(cId) %= clearDirtyFlag
 
 onAppEvent :: MHEvent -> MH ()
 onAppEvent RefreshWebsocketEvent = connectWebsockets
