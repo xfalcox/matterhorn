@@ -1515,7 +1515,7 @@ setChannelTopic msg = do
     let patch = defaultChannelPatch { channelPatchHeader = Just msg }
     doAsyncChannelMM Preempt cId
         (\s _ _ -> MM.mmPatchChannel cId patch s)
-        (\_ _ -> return ())
+        (\_ _ -> mh invalidateCache)
 
 channelHistoryForward :: MH ()
 channelHistoryForward = do
