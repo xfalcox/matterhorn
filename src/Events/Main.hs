@@ -130,9 +130,8 @@ mainKeybindings = mkKeybindings
     , mkKb EnterOpenURLModeEvent "Select and open a URL posted to the current channel"
            startUrlSelect
 
-    , mkKb ClearUnreadEvent "Clear the current channel's unread / edited indicators" $
-           csCurrentChannel %= (clearNewMessageIndicator .
-                                clearEditedThreshold)
+    , mkKb ClearUnreadEvent "Clear the current channel's unread / edited indicators" $ do
+           clearIndicators =<< use csCurrentChannelId
 
     , mkKb ToggleMultiLineEvent "Toggle multi-line message compose mode"
            toggleMultilineEditing

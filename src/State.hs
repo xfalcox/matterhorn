@@ -29,6 +29,7 @@ module State
   , beginCurrentChannelDeleteConfirm
   , deleteCurrentChannel
   , loadMoreMessages
+  , clearIndicators
   , channelScrollToTop
   , channelScrollToBottom
   , channelScrollUp
@@ -736,7 +737,12 @@ setLastViewedFor prevId cId = do
   -- Update the old channel's previous viewed time (allows tracking of new messages)
   case prevId of
     Nothing -> return ()
-    Just p -> csChannels %= (channelByIdL p %~ (clearNewMessageIndicator . clearEditedThreshold))
+    Just p -> clearIndicators p
+
+clearIndicators :: ChannelId -> MH ()
+clearIndicators cId = do
+    mh invalidateCache
+    csChannels %= (channelByIdL cId %~ (clearNewMessageIndicator . clearEditedThreshold))
 
 updateViewed :: MH ()
 updateViewed = do
