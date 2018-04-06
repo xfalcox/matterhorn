@@ -37,10 +37,18 @@ import           State.Common
 import           Network.Mattermost.Types (Post(..))
 
 startMultilineEditing :: MH ()
-startMultilineEditing = csEditState.cedMultiline .= True
+startMultilineEditing = do
+    csEditState.cedMultiline .= True
+    -- This will change the channel message list area, so we need to
+    -- invalidate any cached message list renderings.
+    mh invalidateCache
 
 toggleMultilineEditing :: MH ()
-toggleMultilineEditing = csEditState.cedMultiline %= not
+toggleMultilineEditing = do
+    csEditState.cedMultiline %= not
+    -- This will change the channel message list area, so we need to
+    -- invalidate any cached message list renderings.
+    mh invalidateCache
 
 invokeExternalEditor :: MH ()
 invokeExternalEditor = do
