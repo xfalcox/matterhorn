@@ -335,7 +335,9 @@ renderCurrentChannelDisplay st hs = (header <+> conn) <=> messages
             renderMessagesWithSelect (st^.csMessageSelect) channelMsgs
         MessageSelectDeleteConfirm ->
             renderMessagesWithSelect (st^.csMessageSelect) channelMsgs
-        _ -> renderLastMessages $ reverseMessages channelMsgs
+        _ ->
+            cached (ChannelMessages cId) $
+            renderLastMessages $ reverseMessages channelMsgs
 
     renderMessagesWithSelect (MessageSelectState selPostId) msgs =
         -- In this case, we want to fill the message list with messages
