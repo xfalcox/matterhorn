@@ -88,13 +88,8 @@ handleIEvent (DisplayError msg) = postErrorMessage' msg
 
 onVtyEvent :: Vty.Event -> MH ()
 onVtyEvent e = do
-    -- Even if we aren't showing the help UI when a resize occurs, we
-    -- need to invalidate its cache entry anyway in case the new size
-    -- differs from the cached size.
     case e of
-        (Vty.EvResize _ _) -> do
-            mh $ invalidateCacheEntry HelpText
-            mh $ invalidateCacheEntry ScriptHelpText
+        (Vty.EvResize _ _) -> mh invalidateCache
         _ -> return ()
 
     mode <- gets appMode
