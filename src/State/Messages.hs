@@ -10,8 +10,7 @@ module State.Messages
 import           Data.Function (on)
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import           Lens.Micro.Platform ((.=), (%=), (%~), (.~), to, at,
-                                     traversed, filtered, ix)
+import           Lens.Micro.Platform ((.=), (%=), (.~), at, ix)
 import           Network.Mattermost
 import           Network.Mattermost.Types
 import           State.Common
@@ -44,14 +43,14 @@ clearPendingFlags c = csChannel(c).ccContents.cdFetchPending .= False
 
 addEndGap :: ChannelId -> MH ()
 addEndGap cId = withChannel cId $ \chan ->
-    let lastmsg_ = chan^.ccContents.cdMessages.to reverseMessages.to lastMsg
+    let lastmsg_ = withMessages (lastMsg . reverseMessages) chan
         lastIsGap = maybe False isGap lastmsg_
         gapMsg = newGapMessage timeJustAfterLast
         timeJustAfterLast = maybe t0 (justAfter . _mDate) lastmsg_
         t0 = ServerTime $ originTime  -- use any time for a channel with no messages yet
         newGapMessage = newMessageOfType (T.pack "Disconnected. Will refresh when connected.") (C UnknownGap)
     in unless lastIsGap
-           (csChannels %= modifyChannelById cId (ccContents.cdMessages %~ addMessage gapMsg))
+           (csChannels %= modifyChannelById cId (modifyMessages (addMessage gapMsg)))
 
 
 lastMsg :: RetrogradeMessages -> Maybe Message
@@ -83,7 +82,9 @@ updateMessageFlag pId f = do
     Just msg
       | Just cId <- msg^.mChannelId -> do
       let isTargetMessage m = m^.mPostId == Just pId
-      csChannel(cId).ccContents.cdMessages.traversed.filtered isTargetMessage.mFlagged .= f
+      csChannel(cId) %= modifyMessages (fmap (\m -> if isTargetMessage m
+                                                    then m & mFlagged .~ f
+                                                    else m))
       csPostMap.ix(pId).mFlagged .= f
       -- We also want to update the post overlay if this happens while
       -- we're we're observing it

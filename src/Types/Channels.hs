@@ -17,7 +17,7 @@ module Types.Channels
   , cdName, cdHeader, cdPurpose, cdType
   , cdMentionCount, cdTypingUsers
   -- * Lenses created for accessing ChannelContents fields
-  , cdMessages, cdFetchPending
+  , cdFetchPending
   -- * Creating ClientChannel objects
   , makeClientChannel
   -- * Managing ClientChannel collections
@@ -34,6 +34,11 @@ module Types.Channels
   , adjustEditedThreshold
   , updateNewMessageIndicator
   , addChannelTypingUser
+  , modifyMessages
+  , withMessages
+  , channelMessages
+  , channelIsDirty
+  , clearDirtyFlag
   -- * Notification settings
   , notifyPreference
   -- * Miscellaneous channel-related operations
@@ -127,6 +132,7 @@ channelInfoFromChannelWithData chan chanMember ci =
 data ChannelContents = ChannelContents
   { _cdMessages :: Messages
   , _cdFetchPending :: Bool
+  , _cdDirty :: Bool
   }
 
 -- | An initial empty 'ChannelContents' value.  This also contains an
@@ -139,6 +145,7 @@ emptyChannelContents = do
   gapMsg <- clientMessageToMessage <$> newClientMessage UnknownGap "--Fetching messages--"
   return $ ChannelContents { _cdMessages = addMessage gapMsg noMessages
                            , _cdFetchPending = False
+                           , _cdDirty = True
                            }
 
 
@@ -251,6 +258,24 @@ filteredChannels f cc =
 
 -- * Channel State management
 
+-- | Modify the message sequence with the specified function.
+-- Automatically marks the channel content as dirty.
+modifyMessages :: (Messages -> Messages) -> ClientChannel -> ClientChannel
+modifyMessages f c =
+    c & ccContents.cdMessages %~ f
+      & ccContents.cdDirty .~ True
+
+withMessages :: (Messages -> a) -> ClientChannel -> a
+withMessages f c = f $ c^.ccContents.cdMessages
+
+channelMessages :: ClientChannel -> Messages
+channelMessages = withMessages id
+
+clearDirtyFlag :: ClientChannel -> ClientChannel
+clearDirtyFlag = ccContents.cdDirty .~ False
+
+channelIsDirty :: ClientChannel -> Bool
+channelIsDirty = (^.ccContents.cdDirty)
 
 -- | Add user to the list of users in this channel who are currently typing.
 addChannelTypingUser :: UserId -> UTCTime -> ClientChannel -> ClientChannel

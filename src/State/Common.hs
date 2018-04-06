@@ -11,7 +11,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import           Lens.Micro.Platform ((%=), (%~), (.~), traversed)
+import           Lens.Micro.Platform ((%=), (%~), (.~))
 import           System.Hclip (setClipboard, ClipboardException(..))
 
 import           Network.Mattermost.Endpoints
@@ -215,13 +215,13 @@ asyncFetchAttachments p = do
             m & mAttachments %~ (addIfMissing attachment)
           | otherwise              = m
     return $
-      csChannel(cId).ccContents.cdMessages.traversed %= addAttachment
+      csChannel(cId) %= modifyMessages (fmap addAttachment)
 
 -- | Add a 'ClientMessage' to the current channel's message list
 addClientMessage :: ClientMessage -> MH ()
 addClientMessage msg = do
   cid <- use csCurrentChannelId
-  let addCMsg = ccContents.cdMessages %~ (addMessage $ clientMessageToMessage msg)
+  let addCMsg = modifyMessages (addMessage $ clientMessageToMessage msg)
   csChannels %= modifyChannelById cid addCMsg
 
 -- | Add a new 'ClientMessage' representing an error message to
@@ -243,7 +243,7 @@ postErrorMessageIO :: Text -> ChatState -> IO ChatState
 postErrorMessageIO err st = do
   msg <- newClientMessage Error err
   let cId = st ^. csCurrentChannelId
-      addEMsg = ccContents.cdMessages %~ (addMessage $ clientMessageToMessage msg)
+      addEMsg = modifyMessages (addMessage $ clientMessageToMessage msg)
   return $ st & csChannels %~ modifyChannelById cId addEMsg
 
 numScrollbackPosts :: Int
@@ -257,7 +257,7 @@ asyncFetchReactionsForPost cId p
         addReactions
 
 addReactions :: ChannelId -> [Reaction] -> MH ()
-addReactions cId rs = csChannel(cId).ccContents.cdMessages %= fmap upd
+addReactions cId rs = csChannel(cId) %= modifyMessages (fmap upd)
   where upd msg = msg & mReactions %~ insertAll (msg^.mPostId)
         insert pId r
           | pId == Just (r^.reactionPostIdL) = Map.insertWith (+) (r^.reactionEmojiNameL) 1
@@ -265,7 +265,7 @@ addReactions cId rs = csChannel(cId).ccContents.cdMessages %= fmap upd
         insertAll pId msg = foldr (insert pId) msg rs
 
 removeReaction :: Reaction -> ChannelId -> MH ()
-removeReaction r cId = csChannel(cId).ccContents.cdMessages %= fmap upd
+removeReaction r cId = csChannel(cId) %= modifyMessages (fmap upd)
   where upd m | m^.mPostId == Just (r^.reactionPostIdL) =
                   m & mReactions %~ (Map.insertWith (+) (r^.reactionEmojiNameL) (-1))
               | otherwise = m

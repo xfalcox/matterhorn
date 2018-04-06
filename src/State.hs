@@ -348,7 +348,7 @@ beginMessageSelect = do
     --
     -- If we can't find one at all, we ignore the mode switch request
     -- and just return.
-    chanMsgs <- use(csCurrentChannel . ccContents . cdMessages)
+    chanMsgs <- channelMessages <$> use csCurrentChannel
     let recentPost = getLatestPostMsg chanMsgs
 
     when (isJust recentPost) $ do
@@ -361,7 +361,7 @@ getSelectedMessage st
     | otherwise = do
         selPostId <- selectMessagePostId $ st^.csMessageSelect
 
-        let chanMsgs = st ^. csCurrentChannel . ccContents . cdMessages
+        let chanMsgs = channelMessages $ st^.csCurrentChannel
         findMessage selPostId chanMsgs
 
 messageSelectUp :: MH ()
@@ -370,7 +370,7 @@ messageSelectUp = do
     selected <- use (csMessageSelect.to selectMessagePostId)
     case selected of
         Just _ | mode == MessageSelect -> do
-            chanMsgs <- use (csCurrentChannel.ccContents.cdMessages)
+            chanMsgs <- channelMessages <$> use csCurrentChannel
             let nextPostId = getPrevPostId selected chanMsgs
             csMessageSelect .= MessageSelectState (nextPostId <|> selected)
         _ -> return ()
@@ -380,7 +380,7 @@ messageSelectDown = do
     selected <- use (csMessageSelect.to selectMessagePostId)
     case selected of
         Just _ -> whenMode MessageSelect $ do
-            chanMsgs <- use (csCurrentChannel.ccContents.cdMessages)
+            chanMsgs <- channelMessages <$> use csCurrentChannel
             let nextPostId = getNextPostId selected chanMsgs
             csMessageSelect .= MessageSelectState (nextPostId <|> selected)
         _ -> return ()
@@ -473,7 +473,7 @@ beginUpdateMessage = do
 
 replyToLatestMessage :: MH ()
 replyToLatestMessage = do
-  msgs <- use (csCurrentChannel . ccContents . cdMessages)
+  msgs <- channelMessages <$> use csCurrentChannel
   case findLatestUserMessage isReplyable msgs of
     Just msg -> do let Just p = msg^.mOriginalPost
                    setMode Main
@@ -917,7 +917,8 @@ asyncFetchMoreMessages :: MH ()
 asyncFetchMoreMessages = do
     cId  <- use csCurrentChannelId
     withChannel cId $ \chan ->
-        let offset = max 0 $ length (chan^.ccContents.cdMessages) - 2
+        let msgs = channelMessages chan
+            offset = max 0 $ length msgs - 2
             -- Fetch more messages prior to any existing messages, but
             -- attempt to overlap with existing messages for
             -- determining contiguity or gaps.  Back up two messages
@@ -927,7 +928,7 @@ asyncFetchMoreMessages = do
             -- are at least 2 messages already here, but in case there
             -- aren't, just get another page from roughly the right
             -- location.
-            first' = splitMessagesOn (^.mPostId.to isJust) (chan^.ccContents.cdMessages)
+            first' = splitMessagesOn (^.mPostId.to isJust) msgs
             second' = splitMessagesOn (^.mPostId.to isJust) $ snd $ snd first'
             query = MM.defaultPostQuery
                       { MM.postQueryPage = Just (offset `div` pageAmount)
@@ -964,7 +965,7 @@ addObtainedMessages cId reqCnt posts = do
             earliestDate = postCreateAt $ (posts^.postsPostsL) HM.! earliestPId
             latestDate = postCreateAt $ (posts^.postsPostsL) HM.! latestPId
 
-            localMessages = chan^.ccContents . cdMessages
+            localMessages = channelMessages chan
 
             match = snd $ removeMatchesFromSubset
                           (\m -> maybe False (\p -> p `elem` pIdList) (m^.mPostId))
@@ -1026,7 +1027,7 @@ addObtainedMessages cId reqCnt posts = do
                    ]
 
         csChannels %= modifyChannelById cId
-                           (ccContents.cdMessages %~ (fst . removeMatchesFromSubset isGap removeStart removeEnd))
+                           (modifyMessages (fst . removeMatchesFromSubset isGap removeStart removeEnd))
 
         -- Add a gap at each end of the newly fetched data, unless:
         --   1. there is an overlap
@@ -1038,12 +1039,12 @@ addObtainedMessages cId reqCnt posts = do
         unless (earliestPId `elem` dupPIds || noMoreBefore) $
                let gapMsg = newGapMessage (justBefore earliestDate)
                in csChannels %= modifyChannelById cId
-                       (ccContents.cdMessages %~ addMessage gapMsg)
+                       (modifyMessages (addMessage gapMsg))
 
         unless (latestPId `elem` dupPIds || addingAtEnd || noMoreAfter) $
                let gapMsg = newGapMessage (justAfter latestDate)
                in csChannels %= modifyChannelById cId
-                                 (ccContents.cdMessages %~ addMessage gapMsg)
+                                 (modifyMessages (addMessage gapMsg))
 
         -- Now initiate fetches for use information for any
         -- as-yet-unknown users related to this new set of messages
@@ -1267,7 +1268,7 @@ editMessage new = do
   let isEditedMessage m = m^.mPostId == Just (new^.postIdL)
       msg = clientPostToMessage (toClientPost new (new^.postParentIdL))
       chan = csChannel (new^.postChannelIdL)
-  chan . ccContents . cdMessages . traversed . filtered isEditedMessage .= msg
+  chan %= modifyMessages (fmap (\m -> if isEditedMessage m then msg else m))
 
   when (postUserId new /= Just myId) $
       chan %= adjustEditedThreshold new
@@ -1284,7 +1285,7 @@ deleteMessage new = do
                            isReplyTo (new^.postIdL) m
       chan :: Traversal' ChatState ClientChannel
       chan = csChannel (new^.postChannelIdL)
-  chan.ccContents.cdMessages.traversed.filtered isDeletedMessage %= (& mDeleted .~ True)
+  chan %= modifyMessages (fmap (\m -> if isDeletedMessage m then m & mDeleted .~ True else m))
   chan %= adjustUpdated new
   cId <- use csCurrentChannelId
   when (postChannelId new == cId) updateViewed
@@ -1404,7 +1405,7 @@ addMessageToState newPostData = do
                              & mFlagged .~ ((cp^.cpPostId) `Set.member` flags)
                 csPostMap.at(postId new) .= Just msg'
                 csChannels %= modifyChannelById cId
-                  ((ccContents.cdMessages %~ addMessage msg') .
+                  ((modifyMessages (addMessage msg')) .
                    (adjustUpdated new) .
                    (\c -> if currCId == cId
                           then c
@@ -1481,7 +1482,7 @@ fetchVisibleIfNeeded = do
     Connected -> do
        cId <- use csCurrentChannelId
        withChannel cId $ \chan ->
-           let msgs = chan^.ccContents.cdMessages.to reverseMessages
+           let msgs = withMessages reverseMessages chan
                (numRemaining, gapInDisplayable, _, rel'pId, overlap) =
                    foldl gapTrail (numScrollbackPosts, False, Nothing, Nothing, 2) msgs
                gapTrail a@(_,  True, _, _, _) _ = a
@@ -1735,7 +1736,7 @@ stopUrlSelect = setMode Main
 
 findUrls :: ClientChannel -> [LinkChoice]
 findUrls chan =
-    let msgs = chan^.ccContents.cdMessages
+    let msgs = channelMessages chan
     in removeDuplicates $ concat $ toList $ toList <$> msgURLs <$> msgs
 
 -- XXX: move this somewhere more sensible!
@@ -1819,7 +1820,7 @@ openURL link = do
                     -- when they return, any messages that arrive in the
                     -- current channel will be displayed as new.
                     curChan <- use csCurrentChannel
-                    let msgs = curChan^.ccContents.cdMessages
+                    let msgs = channelMessages curChan
                     case findLatestUserMessage isEditable msgs of
                         Nothing -> return ()
                         Just m ->

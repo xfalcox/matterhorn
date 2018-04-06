@@ -330,12 +330,12 @@ renderCurrentChannelDisplay st hs = (header <+> conn) <=> messages
             cached (ChannelMessages cId) $
             vBox $ (withDefAttr loadMoreAttr $ hCenter $
                     str "<< Press C-b to load more messages >>") :
-                   (toList $ renderSingleMessage st hs editCutoff <$> channelMessages)
+                   (toList $ renderSingleMessage st hs editCutoff <$> channelMsgs)
         MessageSelect ->
-            renderMessagesWithSelect (st^.csMessageSelect) channelMessages
+            renderMessagesWithSelect (st^.csMessageSelect) channelMsgs
         MessageSelectDeleteConfirm ->
-            renderMessagesWithSelect (st^.csMessageSelect) channelMessages
-        _ -> renderLastMessages $ reverseMessages channelMessages
+            renderMessagesWithSelect (st^.csMessageSelect) channelMsgs
+        _ -> renderLastMessages $ reverseMessages channelMsgs
 
     renderMessagesWithSelect (MessageSelectState selPostId) msgs =
         -- In this case, we want to fill the message list with messages
@@ -359,7 +359,7 @@ renderCurrentChannelDisplay st hs = (header <+> conn) <=> messages
 
     cutoff = getNewMessageCutoff cId st
     editCutoff = getEditedMessageCutoff cId st
-    channelMessages =
+    channelMsgs =
         insertTransitions (getMessageListing cId st)
                           cutoff
                           (getDateFormat st)
@@ -395,7 +395,7 @@ renderCurrentChannelDisplay st hs = (header <+> conn) <=> messages
 
 getMessageListing :: ChannelId -> ChatState -> Messages
 getMessageListing cId st =
-    st ^?! csChannels.folding (findChannelById cId) . ccContents . cdMessages . to (filterMessages isShown)
+    st ^?! csChannels.folding (findChannelById cId) . to channelMessages . to (filterMessages isShown)
     where isShown m
             | st^.csResources.crUserPreferences.userPrefShowJoinLeave = True
             | otherwise = m^.mType /= CP Join && m^.mType /= CP Leave
