@@ -8,6 +8,7 @@ import           Prelude.MH
 
 import           Brick.Widgets.Edit (Editor, handleEditorEvent, getEditContents, editContentsL)
 import           Brick.Widgets.Edit (applyEdit)
+import           Brick.Main (invalidateCache)
 import qualified Codec.Binary.UTF8.Generic as UTF8
 import           Control.Arrow
 import qualified Control.Concurrent.STM as STM
@@ -76,7 +77,11 @@ invokeExternalEditor = do
             Sys.ExitFailure _ -> return st
 
 toggleMessagePreview :: MH ()
-toggleMessagePreview = csShowMessagePreview %= not
+toggleMessagePreview = do
+    csShowMessagePreview %= not
+    -- This will change the channel message list area, so we need to
+    -- invalidate any cached message list renderings.
+    mh invalidateCache
 
 handlePaste :: BS.ByteString -> MH ()
 handlePaste bytes = do
