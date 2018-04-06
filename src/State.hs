@@ -874,8 +874,9 @@ setTheme :: Text -> MH ()
 setTheme name =
     case lookupTheme name of
         Nothing -> listThemes
-        Just it -> csResources.crTheme .=
-            (themeToAttrMap $ internalTheme it)
+        Just it -> do
+            mh invalidateCache
+            csResources.crTheme .= (themeToAttrMap $ internalTheme it)
 
 channelPageUp :: MH ()
 channelPageUp = do
