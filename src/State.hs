@@ -119,7 +119,7 @@ import           Control.Concurrent (MVar, putMVar, forkIO)
 import qualified Control.Concurrent.STM as STM
 import           Control.Exception (SomeException, try)
 import           Data.Char (isAlphaNum)
-import           Brick.Main (getVtyHandle, viewportScroll, vScrollToBeginning, vScrollBy, vScrollToEnd)
+import           Brick.Main (getVtyHandle, viewportScroll, vScrollToBeginning, vScrollBy, vScrollToEnd, invalidateCache)
 import           Brick.Widgets.Edit (applyEdit)
 import qualified Data.ByteString as BS
 import           Data.Function (on)
@@ -1963,6 +1963,7 @@ handleNewUserDirect :: User -> MH ()
 handleNewUserDirect newUser = do
     let usrInfo = userInfoFromUser newUser True
     addNewUser usrInfo
+    mh invalidateCache
 
 handleNewUsers :: Seq UserId -> MH ()
 handleNewUsers newUserIds = doAsyncMM Preempt getUserInfo addNewUsers
