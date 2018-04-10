@@ -474,6 +474,7 @@ beginUpdateMessage = do
 
 replyToLatestMessage :: MH ()
 replyToLatestMessage = do
+  mh invalidateCache
   msgs <- channelMessages <$> use csCurrentChannel
   case findLatestUserMessage isReplyable msgs of
     Just msg -> do let Just p = msg^.mOriginalPost
@@ -488,6 +489,7 @@ beginReplyCompose = do
         Nothing -> return ()
         Just msg -> do
             let Just p = msg^.mOriginalPost
+            mh invalidateCache
             setMode Main
             csEditState.cedEditMode .= Replying msg p
 
@@ -497,6 +499,7 @@ cancelReplyOrEdit = do
     case mode of
         NewPost -> return ()
         _ -> do
+            mh invalidateCache
             csEditState.cedEditMode .= NewPost
             csEditState.cedEditor %= applyEdit clearZipper
 
