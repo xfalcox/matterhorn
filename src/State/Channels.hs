@@ -53,7 +53,7 @@ import           Control.Exception ( SomeException, try )
 import           Data.Char ( isAlphaNum )
 import qualified Data.HashMap.Strict as HM
 import           Data.Function ( on )
-import           Data.Maybe ( fromJust, mapMaybe )
+import           Data.Maybe ( fromJust )
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -582,10 +582,10 @@ getNextUnreadUserOrChannel :: ChatState
                        -> Zipper ChannelId
 getNextUnreadUserOrChannel st z =
     -- Find the next unread channel, prefering direct messages
-    let dmChans = mapMaybe (\u -> channelIdByUsername (u^.uiName) st) (sortedUserList st)
-        isDM c = c `elem` dmChans
+    -- let dmChans = mapMaybe (\u -> channelIdByUsername (u^.uiName) st) (sortedUserList st)
+    let isDM c = getChannelType st c == Direct
         isFresh c = hasUnread st c && (c /= st^.csCurrentChannelId)
-    in maybe (Z.findRight isFresh z) id (Z.maybeFindRight (\cId -> isDM cId && isFresh cId) z)
+    in fromMaybe (Z.findRight isFresh z) (Z.maybeFindRight (\cId -> isDM cId && isFresh cId) z)
 
 -- | Select the next channel in the channel zipper that is not a DM
 -- channel.
