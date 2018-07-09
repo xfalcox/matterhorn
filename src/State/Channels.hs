@@ -598,14 +598,17 @@ getNextNonDMChannel :: ChatState
                     -> (Zipper ChannelId -> Zipper ChannelId)
                     -> (Zipper ChannelId -> Zipper ChannelId)
 getNextNonDMChannel st shift z =
-    if fType z == Direct
+    if getChannelType st (Z.focus z) == Direct
     then z
     else go (shift z)
   where go z'
           | fType z' /= Direct = z'
           | otherwise = go (shift z')
-        fType onz = st^.(csChannels.to
-                          (findChannelById (Z.focus onz))) ^?! _Just.ccInfo.cdType
+        fType onz = getChannelType st (Z.focus onz)
+
+getChannelType :: ChatState -> ChannelId -> Type
+getChannelType st cId =
+    st^.(csChannels.to (findChannelById cId)) ^?! _Just.ccInfo.cdType
 
 leaveCurrentChannel :: MH ()
 leaveCurrentChannel = use csCurrentChannelId >>= leaveChannel
