@@ -51,7 +51,7 @@ import           Control.Exception ( SomeException, try )
 import           Data.Char ( isAlphaNum )
 import qualified Data.HashMap.Strict as HM
 import           Data.Function ( on )
-import           Data.Maybe ( fromJust )
+import           Data.Maybe ( fromJust, mapMaybe )
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -561,14 +561,18 @@ leaveChannelIfPossible cId delete = do
                     )
 
 getNextUnreadChannel :: ChatState
-                     -> (Zipper ChannelId -> Zipper ChannelId)
-getNextUnreadChannel st =
+                     -> Zipper ChannelId
+                     -> Zipper ChannelId
+getNextUnreadChannel st z =
     -- The next channel with unread messages must also be a channel
     -- other than the current one, since the zipper may be on a channel
     -- that has unread messages and will stay that way until we leave
     -- it- so we need to skip that channel when doing the zipper search
     -- for the next candidate channel.
-    Z.findRight (\cId -> hasUnread st cId && (cId /= st^.csCurrentChannelId))
+    let dmChans = mapMaybe (\u -> channelIdByUsername (u^.uiName) st) (sortedUserList st)
+        isDM c = c `elem` dmChans
+        isFresh c = hasUnread st c && (c /= st^.csCurrentChannelId)
+    in maybe (Z.findRight isFresh z) id (Z.maybeFindRight (\cId -> isDM cId && isFresh cId) z)
 
 getNextNonDMChannel :: ChatState
                     -> (Zipper ChannelId -> Zipper ChannelId)
