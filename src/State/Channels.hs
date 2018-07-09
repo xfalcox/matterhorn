@@ -13,7 +13,9 @@ module State.Channels
   , leaveChannelIfPossible
   , leaveCurrentChannel
   , getNextUnreadChannel
+  , getNextUnreadUserOrChannel
   , nextUnreadChannel
+  , nextUnreadUserOrChannel
   , prevChannel
   , nextChannel
   , recentChannel
@@ -507,6 +509,11 @@ nextUnreadChannel = do
     st <- use id
     setFocusWith (getNextUnreadChannel st)
 
+nextUnreadUserOrChannel :: MH ()
+nextUnreadUserOrChannel = do
+    st <- use id
+    setFocusWith (getNextUnreadUserOrChannel st)
+
 leaveChannel :: ChannelId -> MH ()
 leaveChannel cId = leaveChannelIfPossible cId False
 
@@ -561,14 +568,20 @@ leaveChannelIfPossible cId delete = do
                     )
 
 getNextUnreadChannel :: ChatState
-                     -> Zipper ChannelId
-                     -> Zipper ChannelId
-getNextUnreadChannel st z =
+                     -> (Zipper ChannelId -> Zipper ChannelId)
+getNextUnreadChannel st =
     -- The next channel with unread messages must also be a channel
     -- other than the current one, since the zipper may be on a channel
     -- that has unread messages and will stay that way until we leave
     -- it- so we need to skip that channel when doing the zipper search
     -- for the next candidate channel.
+    Z.findRight (\cId -> hasUnread st cId && (cId /= st^.csCurrentChannelId))
+
+getNextUnreadUserOrChannel :: ChatState
+                       -> Zipper ChannelId
+                       -> Zipper ChannelId
+getNextUnreadUserOrChannel st z =
+    -- Find the next unread channel, prefering direct messages
     let dmChans = mapMaybe (\u -> channelIdByUsername (u^.uiName) st) (sortedUserList st)
         isDM c = c `elem` dmChans
         isFresh c = hasUnread st c && (c /= st^.csCurrentChannelId)
