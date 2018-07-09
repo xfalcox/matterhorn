@@ -582,7 +582,6 @@ getNextUnreadUserOrChannel :: ChatState
                        -> Zipper ChannelId
 getNextUnreadUserOrChannel st z =
     -- Find the next unread channel, prefering direct messages
-    -- let dmChans = mapMaybe (\u -> channelIdByUsername (u^.uiName) st) (sortedUserList st)
     let isDM c = getChannelType st c == Direct
         isFresh c = hasUnread st c && (c /= st^.csCurrentChannelId)
     in fromMaybe (Z.findRight isFresh z) (Z.maybeFindRight (\cId -> isDM cId && isFresh cId) z)
