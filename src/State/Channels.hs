@@ -587,6 +587,13 @@ getNextUnreadUserOrChannel st z =
         isFresh c = hasUnread st c && (c /= st^.csCurrentChannelId)
     in maybe (Z.findRight isFresh z) id (Z.maybeFindRight (\cId -> isDM cId && isFresh cId) z)
 
+-- | Select the next channel in the channel zipper that is not a DM
+-- channel.
+--
+-- If the currently selected channel is a DM channel, do nothing because
+-- we want to prevent zipper navigation away from direct channels
+-- because we don't support navigating *back* to such channels using the
+-- same navigation bindings.
 getNextNonDMChannel :: ChatState
                     -> (Zipper ChannelId -> Zipper ChannelId)
                     -> (Zipper ChannelId -> Zipper ChannelId)
