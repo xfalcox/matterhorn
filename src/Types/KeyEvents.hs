@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Types.KeyEvents
   (
   -- * Types
@@ -25,8 +28,10 @@ where
 import           Prelude ()
 import           Prelude.MH
 
+import qualified Data.Aeson as A
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
+import           GHC.Generics ( Generic )
 import qualified Graphics.Vty as Vty
 
 
@@ -85,7 +90,7 @@ data KeyEvent
   | DeleteMessageEvent
   | EditMessageEvent
   | ReplyMessageEvent
-    deriving (Eq, Show, Ord, Enum)
+    deriving (Eq, Show, Ord, Enum, Generic, A.FromJSON, A.ToJSON, A.ToJSONKey, A.FromJSONKey)
 
 allEvents :: [KeyEvent]
 allEvents =
@@ -142,6 +147,15 @@ eventToBinding :: Vty.Event -> Binding
 eventToBinding (Vty.EvKey k mods) = Binding mods k
 eventToBinding k = error $ "BUG: invalid keybinding " <> show k
 
+instance A.FromJSON Binding where
+    parseJSON = A.withText "Binding" $ \t ->
+        case parseBinding t of
+            Left e -> fail e
+            Right b -> return b
+
+instance A.ToJSON Binding where
+    toJSON = A.toJSON . ppBinding
+
 data Binding = Binding
   { kbMods :: [Vty.Modifier]
   , kbKey  :: Vty.Key
@@ -150,7 +164,7 @@ data Binding = Binding
 data BindingState =
     BindingList [Binding]
     | Unbound
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Generic, A.FromJSON, A.ToJSON)
 
 type KeyConfig = M.Map KeyEvent BindingState
 

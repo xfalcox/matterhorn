@@ -5,6 +5,10 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Types
   ( ConnectionStatus(..)
   , HelpTopic(..)
@@ -229,6 +233,7 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Exception ( SomeException )
 import qualified Control.Monad.State as St
 import qualified Control.Monad.Reader as R
+import qualified Data.Aeson as A
 import qualified Data.Foldable as F
 import qualified Data.HashMap.Strict as HM
 import           Data.List ( partition, sortBy )
@@ -238,11 +243,12 @@ import qualified Data.Text as T
 import           Data.Time.Clock ( UTCTime, getCurrentTime )
 import           Data.UUID ( UUID )
 import qualified Data.Vector as Vec
+import           GHC.Generics ( Generic )
 import           Lens.Micro.Platform ( at, makeLenses, lens, (%~), (^?!), (.=)
                                      , (%=), (^?), (.~)
                                      , _Just, Traversal', preuse, (^..), folded, to, view )
 import           Network.Connection ( HostNotResolved, HostCannotConnect )
-import           Skylighting.Types ( SyntaxMap )
+import           Skylighting.Types ( SyntaxMap, Syntax )
 import           System.Exit ( ExitCode )
 import           System.Random ( randomIO )
 import           Text.Aspell ( Aspell )
@@ -273,7 +279,7 @@ import           Zipper ( Zipper, focusL, updateList )
 data PasswordSource =
     PasswordString Text
     | PasswordCommand Text
-    deriving (Eq, Read, Show)
+    deriving (Eq, Read, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | This is how we represent the user's configuration. Most fields
 -- correspond to configuration file settings (see Config.hs) but some
@@ -338,7 +344,7 @@ data Config =
            -- ^ Whether to enable terminal hyperlinking mode.
            , configSyntaxDirs :: [FilePath]
            -- ^ The search path for syntax description XML files.
-           } deriving (Eq, Show)
+           } deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | The state of the UI diagnostic indicator for the async worker
 -- thread.
@@ -350,7 +356,7 @@ data BackgroundInfo =
     | ActiveCount
     -- ^ Show the indicator when the thread is working, but include the
     -- thread's work queue length.
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- * 'MMNames' structures
 
@@ -367,6 +373,7 @@ data MMNames =
             , _cnToUserId :: HashMap Text UserId
             -- ^ Mapping from user names to 'UserId' values
             }
+            deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | MMNames constructor, seeded with an initial mapping of user ID to
 -- user and channel metadata.
@@ -431,7 +438,7 @@ data Name =
     | UserListSearchInput
     | UserListSearchResults
     | ViewMessageArea
-    deriving (Eq, Show, Ord)
+    deriving (Eq, Show, Ord, Generic, A.FromJSON, A.ToJSON)
 
 -- | The sum type of exceptions we expect to encounter on authentication
 -- failure. We encode them explicitly here so that we can print them in
@@ -464,7 +471,7 @@ makeLenses ''ConnectionInfo
 data PostRef
     = MMId PostId
     | CLId Int
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, A.ToJSON, A.FromJSON)
 
 -- Sigils
 normalChannelSigil :: Text
@@ -487,7 +494,7 @@ data ChannelSelectMatch =
                        -- ^ The full string for this entry so it doesn't
                        -- have to be reassembled from the parts above.
                        }
-                       deriving (Eq, Show)
+                       deriving (Eq, Show, Generic, A.ToJSON, A.FromJSON)
 
 data ChannelSelectPattern = CSP MatchType Text
                           deriving (Eq, Show)
@@ -517,6 +524,7 @@ data UserPreferences =
                     , _userPrefFlaggedPostList   :: Seq FlaggedPost
                     , _userPrefGroupChannelPrefs :: HashMap ChannelId Bool
                     }
+                    deriving (Generic, A.FromJSON, A.ToJSON)
 
 defaultUserPreferences :: UserPreferences
 defaultUserPreferences =
@@ -621,6 +629,7 @@ data ChatResources =
                   , _crSyntaxMap           :: SyntaxMap
                   , _crMutable             :: MutableResources
                   }
+                  deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | Mutable or volatile chat resources. We keep these in their own type
 -- so we can serialize chat states without attempting to serialize
@@ -647,6 +656,12 @@ data MutableResources =
                        , mutLogManager          :: LogManager
                        }
 
+instance A.FromJSON MutableResources where
+    parseJSON = A.withObject "MutableResources" $ const EmptyMutableResources
+
+instance A.ToJSON MutableResources where
+    toJSON = const $ A.object []
+
 -- | The 'ChatEditState' value contains the editor widget itself as well
 -- as history and metadata we need for editing-related operations.
 data ChatEditState =
@@ -661,6 +676,7 @@ data ChatEditState =
                   , _cedSpellChecker         :: Maybe (Aspell, IO ())
                   , _cedMisspellings         :: Set Text
                   }
+                  deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | The input mode.
 data EditMode =
@@ -672,7 +688,7 @@ data EditMode =
     | Replying Message Post
     -- ^ The input is to be used as a new post in reply to the specified
     -- post.
-    deriving (Show)
+    deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | We can initialize a new 'ChatEditState' value with just an edit
 -- history, which we save locally.
@@ -717,7 +733,7 @@ data HelpTopic =
 data PostListContents =
     PostListFlagged
     | PostListSearch Text Bool -- for the query and search status
-    deriving (Eq)
+    deriving (Eq, Generic, A.FromJSON, A.ToJSON)
 
 -- | The 'Mode' represents the current dominant UI activity
 data Mode =
@@ -734,10 +750,11 @@ data Mode =
     | PostListOverlay PostListContents
     | UserListOverlay
     | ViewMessage
-    deriving (Eq)
+    deriving (Eq, Generic, A.FromJSON, A.ToJSON)
 
 -- | We're either connected or we're not.
 data ConnectionStatus = Connected | Disconnected
+                      deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | This is the giant bundle of fields that represents the current
 -- state of our application at any given time. Some of this should be
@@ -807,6 +824,7 @@ data ChatState =
               -- ^ Set when the ViewMessage mode is active. The message
               -- being viewed.
               }
+              deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | Startup state information that is constructed prior to building a
 -- ChatState.
@@ -872,7 +890,7 @@ listFromUserSearchResults rs =
 data MatchValue =
     UserMatch Text
     | ChannelMatch Text
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | The state of channel selection mode.
 data ChannelSelectState =
@@ -881,6 +899,7 @@ data ChannelSelectState =
                        , _userMatches        :: [ChannelSelectMatch]
                        , _selectedMatch      :: Maybe MatchValue
                        }
+                       deriving (Generic, A.FromJSON, A.ToJSON)
 
 emptyChannelSelectState :: ChannelSelectState
 emptyChannelSelectState =
@@ -894,12 +913,14 @@ emptyChannelSelectState =
 data MessageSelectState =
     MessageSelectState { selectMessageId :: Maybe MessageId
                        }
+                       deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | The state of the post list overlay.
 data PostListOverlayState =
     PostListOverlayState { _postListPosts    :: Messages
                          , _postListSelected :: Maybe PostId
                          }
+                         deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | The state of the user list overlay.
 data UserListOverlayState =
@@ -911,12 +932,14 @@ data UserListOverlayState =
                          , _userListHasAllResults :: Bool
                          , _userListEnterHandler :: UserInfo -> MH Bool
                          }
+                         deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | The scope for searching for users in a user list overlay.
 data UserSearchScope =
     ChannelMembers ChannelId
     | ChannelNonMembers ChannelId
     | AllUsers
+    deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | Actions that can be sent on the websocket to the server.
 data WebsocketAction =
