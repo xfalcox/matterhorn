@@ -16,6 +16,7 @@ import           Prelude.MH
 
 import qualified Control.Concurrent.STM as STM
 import           Control.Exception ( try )
+import           Lens.Micro.Platform (to)
 
 import           Network.Mattermost.Types
 
@@ -101,7 +102,7 @@ doAsyncWith prio act = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
           Normal  -> STM.writeTChan
-    queue <- use (csResources.crMutable.mutRequestQueue)
+    queue <- use (csResources.crMutable.to mutRequestQueue)
     liftIO $ STM.atomically $ putChan queue act
 
 doAsyncIO :: AsyncPriority -> ChatState -> IO () -> IO ()
@@ -115,7 +116,7 @@ doAsyncWithIO prio st act = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
           Normal  -> STM.writeTChan
-    let queue = st^.csResources.crMutable.mutRequestQueue
+    let queue = st^.csResources.crMutable.to mutRequestQueue
     STM.atomically $ putChan queue act
 
 -- | Performs an asynchronous IO operation. On completion, the final

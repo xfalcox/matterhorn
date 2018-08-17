@@ -14,6 +14,7 @@ import qualified Data.Text as T
 import           Data.Time ( UTCTime(..), secondsToDiffTime, getCurrentTime
                            , diffUTCTime )
 import           Data.Time.Calendar ( Day(..) )
+import           Lens.Micro.Platform ( to )
 
 import           Network.Mattermost.Types ( ChannelId )
 import qualified Network.Mattermost.WebSocket as WS
@@ -28,10 +29,11 @@ connectWebsockets = do
   session <- getSession
   logger <- mhGetIOLogger
   liftIO $ do
-    let shunt (Left msg) = writeBChan (st^.csResources.crMutable.mutEventQueue) (WebsocketParseError msg)
-        shunt (Right e) = writeBChan (st^.csResources.crMutable.mutEventQueue) (WSEvent e)
+    let queue = st^.csResources.crMutable.to mutEventQueue
+        shunt (Left msg) = writeBChan queue (WebsocketParseError msg)
+        shunt (Right e) = writeBChan queue (WSEvent e)
         runWS = WS.mmWithWebSocket session shunt $ \ws -> do
-                  writeBChan (st^.csResources.crMutable.mutEventQueue) WebsocketConnect
+                  writeBChan queue WebsocketConnect
                   processWebsocketActions st ws 1 HM.empty
     void $ forkIO $ runWS `catch` handleTimeout logger 1 st
                           `catch` handleError logger 5 st
@@ -44,10 +46,10 @@ connectWebsockets = do
 -- | so that the new user_typing actions are throttled to be send only once in two seconds.
 processWebsocketActions :: ChatState -> WS.MMWebSocket -> Int64 -> HashMap ChannelId (Max UTCTime) -> IO ()
 processWebsocketActions st ws s userTypingLastNotifTimeMap = do
-  action <- STM.atomically $ STM.readTChan (st^.csResources.crMutable.mutWebsocketActionChan)
+  action <- STM.atomically $ STM.readTChan (st^.csResources.crMutable.to mutWebsocketActionChan)
   if (shouldSendAction action)
     then do
-      WS.mmSendWSAction (st^.csResources.crMutable.mutConn) ws $ convert action
+      WS.mmSendWSAction (st^.csResources.crMutable.to mutConn) ws $ convert action
       now <- getCurrentTime
       processWebsocketActions st ws (s + 1) $ userTypingLastNotifTimeMap' action now
     else do
@@ -77,6 +79,6 @@ handleError logger seconds st e = do
 
 reconnectAfter :: Int -> ChatState -> IO ()
 reconnectAfter seconds st = do
-  writeBChan (st^.csResources.crMutable.mutEventQueue) WebsocketDisconnect
+  writeBChan (st^.csResources.crMutable.to mutEventQueue) WebsocketDisconnect
   threadDelay (seconds * 1000 * 1000)
-  writeBChan (st^.csResources.crMutable.mutEventQueue) RefreshWebsocketEvent
+  writeBChan (st^.csResources.crMutable.to mutEventQueue) RefreshWebsocketEvent

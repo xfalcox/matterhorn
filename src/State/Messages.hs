@@ -453,7 +453,7 @@ data PostToAdd =
 
 runNotifyCommand :: Post -> Bool -> MH ()
 runNotifyCommand post mentioned = do
-    outputChan <- use (csResources.crMutable.mutSubprocessLog)
+    outputChan <- use (csResources.crMutable.to mutSubprocessLog)
     st <- use id
     notifyCommand <- use (csResources.crConfiguration.to configActivityNotifyCommand)
     case notifyCommand of
@@ -547,7 +547,7 @@ asyncFetchAttachments p = do
   let cId = (p^.postChannelIdL)
       pId = (p^.postIdL)
   session <- getSession
-  host    <- use (csResources.crMutable.mutConn.cdHostnameL)
+  host    <- use (csResources.crMutable.to mutConn.cdHostnameL)
   F.forM_ (p^.postFileIdsL) $ \fId -> doAsyncWith Normal $ do
     info <- MM.mmGetMetadataForFile fId session
     let scheme = "https://"

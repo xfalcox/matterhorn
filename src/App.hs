@@ -10,6 +10,7 @@ import           Prelude.MH
 import           Brick
 import           Control.Monad.Trans.Except ( runExceptT )
 import qualified Graphics.Vty as Vty
+import           Lens.Micro.Platform ( to )
 import           Text.Aspell ( stopAspell )
 
 import           Network.Mattermost
@@ -46,7 +47,7 @@ runMatterhorn opts config = do
           Vty.setMode output Vty.Hyperlink $ configHyperlinkingMode config
           return vty
 
-    finalSt <- customMain mkVty (Just $ st^.csResources.crMutable.mutEventQueue) app st
+    finalSt <- customMain mkVty (Just $ st^.csResources.crMutable.to mutEventQueue) app st
 
     case finalSt^.csEditState.cedSpellChecker of
         Nothing -> return ()
@@ -66,7 +67,7 @@ closeMatterhorn finalSt = do
   logIfError (writeLastRunState finalSt)
       "Error in writing last run state"
 
-  shutdownLogManager $ finalSt^.csResources.crMutable.mutLogManager
+  shutdownLogManager $ finalSt^.csResources.crMutable.to mutLogManager
 
   where
     logIfError action msg = do

@@ -9,6 +9,7 @@ import           Prelude.MH
 
 import           Control.Concurrent ( takeMVar, newEmptyMVar )
 import qualified Control.Concurrent.STM as STM
+import           Lens.Micro.Platform ( to )
 import qualified Data.Text as T
 import           System.Exit ( ExitCode(..) )
 
@@ -21,7 +22,7 @@ import           Types
 findAndRunScript :: Text -> Text -> MH ()
 findAndRunScript scriptName input = do
     fpMb <- liftIO $ locateScriptPath (T.unpack scriptName)
-    outputChan <- use (csResources.crMutable.mutSubprocessLog)
+    outputChan <- use (csResources.crMutable.to mutSubprocessLog)
     case fpMb of
       ScriptPath scriptPath -> do
         doAsyncWith Preempt $ runScript outputChan scriptPath input

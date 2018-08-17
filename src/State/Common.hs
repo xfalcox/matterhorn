@@ -30,7 +30,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import           Lens.Micro.Platform ( (.=), (%=), (%~), (.~) )
+import           Lens.Micro.Platform ( (.=), (%=), (%~), (.~), to )
 import           System.Directory ( createDirectoryIfMissing )
 import           System.Environment.XDG.BaseDir ( getUserCacheDir )
 import           System.Exit ( ExitCode(..) )
@@ -137,7 +137,7 @@ openURL link = do
             -- Matterhorn interactively.
             case configURLOpenCommandInteractive cfg of
                 False -> do
-                    outputChan <- use (csResources.crMutable.mutSubprocessLog)
+                    outputChan <- use (csResources.crMutable.to mutSubprocessLog)
                     doAsyncWith Preempt $ do
                         args <- act
                         runLoggedCommand False outputChan (T.unpack urlOpenCommand)

@@ -18,7 +18,7 @@ import           Control.Monad.Trans.Except
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
-import           Lens.Micro.Platform ( makeLenses )
+import           Lens.Micro.Platform ( makeLenses, to )
 import           System.Directory ( createDirectoryIfMissing )
 import           System.FilePath ( dropFileName )
 import qualified System.Posix.Files as P
@@ -60,8 +60,8 @@ makeLenses ''LastRunState
 
 toLastRunState :: ChatState -> LastRunState
 toLastRunState cs = LastRunState
-  { _lrsHost              = cs^.csResources.crMutable.mutConn.cdHostnameL
-  , _lrsPort              = cs^.csResources.crMutable.mutConn.cdPortL
+  { _lrsHost              = cs^.csResources.crMutable.to mutConn.cdHostnameL
+  , _lrsPort              = cs^.csResources.crMutable.to mutConn.cdPortL
   , _lrsUserId            = myUserId cs
   , _lrsSelectedChannelId = cs^.csCurrentChannelId
   }
@@ -94,6 +94,6 @@ readLastRunState tId = runExceptT $ do
 -- | Checks if the given last run state is valid for the current server and user.
 isValidLastRunState :: ChatResources -> User -> LastRunState -> Bool
 isValidLastRunState cr me rs =
-     rs^.lrsHost   == cr^.crMutable.mutConn.cdHostnameL
-  && rs^.lrsPort   == cr^.crMutable.mutConn.cdPortL
+     rs^.lrsHost   == cr^.crMutable.to mutConn.cdHostnameL
+  && rs^.lrsPort   == cr^.crMutable.to mutConn.cdPortL
   && rs^.lrsUserId == me^.userIdL

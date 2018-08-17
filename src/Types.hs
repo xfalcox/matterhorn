@@ -117,14 +117,6 @@ module Types
   , crMutable
 
   , MutableResources(..)
-  , mutSubprocessLog
-  , mutEventQueue
-  , mutWebsocketActionChan
-  , mutRequestQueue
-  , mutUserStatusLock
-  , mutUserIdSet
-  , mutConn
-  , mutLogManager
 
   , getSession
   , getResourceSession
@@ -630,17 +622,30 @@ data ChatResources =
                   , _crMutable             :: MutableResources
                   }
 
+-- | Mutable or volatile chat resources. We keep these in their own type
+-- so we can serialize chat states without attempting to serialize
+-- these values. In that case we fill in this value with
+-- EmptyMutableResources; otherwise, under normal operating conditions,
+-- this value is always a MutableResources. Because we have this
+-- structure, we don't generate lenses for this type because makeLenses
+-- will generate Traversals for all of the record fields to account for
+-- the fact that not all MutableResources values will be usable with the
+-- record field lenses otherwise. That creates enough of an API headache
+-- (and isn't even necessary in practice because these fields rarely
+-- actually *need* to be changed) that we don't bother with lenses at
+-- all for this type.
 data MutableResources =
-    MutableResources { _mutSession             :: Session
-                     , _mutConn                :: ConnectionData
-                     , _mutRequestQueue        :: RequestChan
-                     , _mutEventQueue          :: BChan MHEvent
-                     , _mutSubprocessLog       :: STM.TChan ProgramOutput
-                     , _mutWebsocketActionChan :: STM.TChan WebsocketAction
-                     , _mutUserStatusLock      :: MVar ()
-                     , _mutUserIdSet           :: STM.TVar (Seq UserId)
-                     , _mutLogManager          :: LogManager
-                     }
+    EmptyMutableResources
+    | MutableResources { mutSession             :: Session
+                       , mutConn                :: ConnectionData
+                       , mutRequestQueue        :: RequestChan
+                       , mutEventQueue          :: BChan MHEvent
+                       , mutSubprocessLog       :: STM.TChan ProgramOutput
+                       , mutWebsocketActionChan :: STM.TChan WebsocketAction
+                       , mutUserStatusLock      :: MVar ()
+                       , mutUserIdSet           :: STM.TVar (Seq UserId)
+                       , mutLogManager          :: LogManager
+                       }
 
 -- | The 'ChatEditState' value contains the editor widget itself as well
 -- as history and metadata we need for editing-related operations.
@@ -960,7 +965,7 @@ mhLog cat msg = do
 mhGetIOLogger :: MH (LogCategory -> Text -> IO ())
 mhGetIOLogger = do
     ctx <- getLogContext
-    mgr <- use (to (_mutLogManager . _crMutable . _csResources))
+    mgr <- use (to (mutLogManager._crMutable._csResources))
     return $ \cat msg -> do
         now <- liftIO getCurrentTime
         let lm = LogMessage { logMessageText = msg
@@ -1091,7 +1096,6 @@ data MHError =
 -- ** Application State Lenses
 
 makeLenses ''ChatResources
-makeLenses ''MutableResources
 makeLenses ''ChatState
 makeLenses ''ChatEditState
 makeLenses ''PostListOverlayState
@@ -1100,10 +1104,10 @@ makeLenses ''ChannelSelectState
 makeLenses ''UserPreferences
 
 getSession :: MH Session
-getSession = use (csResources.crMutable.mutSession)
+getSession = St.gets (mutSession._crMutable._csResources)
 
 getResourceSession :: ChatResources -> Session
-getResourceSession = _mutSession._crMutable
+getResourceSession = mutSession._crMutable
 
 whenMode :: Mode -> MH () -> MH ()
 whenMode m act = do
@@ -1152,7 +1156,7 @@ withChannelOrDefault cId deflt mote = do
 
 raiseInternalEvent :: InternalEvent -> MH ()
 raiseInternalEvent ev = do
-    queue <- use (csResources.crMutable.mutEventQueue)
+    queue <- St.gets (mutEventQueue._crMutable._csResources)
     St.liftIO $ writeBChan queue (IEvent ev)
 
 -- | Log and raise an error.
@@ -1252,12 +1256,12 @@ addNewUser u = do
     csNames.cnUsers %= (sort . (uname:))
     csNames.cnToUserId.at uname .= Just uid
 
-    userSet <- use (csResources.crMutable.mutUserIdSet)
+    userSet <- St.gets (mutUserIdSet._crMutable._csResources)
     St.liftIO $ STM.atomically $ STM.modifyTVar userSet $ (uid Seq.<|)
 
 setUserIdSet :: Seq UserId -> MH ()
 setUserIdSet ids = do
-    userSet <- use (csResources.crMutable.mutUserIdSet)
+    userSet <- St.gets (mutUserIdSet._crMutable._csResources)
     St.liftIO $ STM.atomically $ STM.writeTVar userSet ids
 
 addChannelName :: Type -> ChannelId -> Text -> MH ()

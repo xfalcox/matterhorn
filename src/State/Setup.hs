@@ -16,7 +16,7 @@ import           Data.Maybe ( fromJust )
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import           Data.Time.Clock ( getCurrentTime )
-import           Lens.Micro.Platform ( (%~) )
+import           Lens.Micro.Platform ( (%~), to )
 import           System.Exit ( exitFailure )
 import           System.FilePath ( (</>), isRelative, dropFileName )
 import           System.IO.Error ( catchIOError )
@@ -179,15 +179,15 @@ setupState mLogLocation initialConfig = do
                          , _crSyntaxMap           = undefined
                          , _crMutable             = mut
                          }
-      mut = MutableResources { _mutSession             = session
-                             , _mutConn                = cd
-                             , _mutRequestQueue        = requestChan
-                             , _mutEventQueue          = eventChan
-                             , _mutSubprocessLog       = slc
-                             , _mutWebsocketActionChan = wac
-                             , _mutUserStatusLock      = userStatusLock
-                             , _mutUserIdSet           = userIdSet
-                             , _mutLogManager          = logMgr
+      mut = MutableResources { mutSession             = session
+                             , mutConn                = cd
+                             , mutRequestQueue        = requestChan
+                             , mutEventQueue          = eventChan
+                             , mutSubprocessLog       = slc
+                             , mutWebsocketActionChan = wac
+                             , mutUserStatusLock      = userStatusLock
+                             , mutUserIdSet           = userIdSet
+                             , mutLogManager          = logMgr
                              }
 
   st <- initializeState cr myTeam me
@@ -202,7 +202,7 @@ setupState mLogLocation initialConfig = do
 initializeState :: ChatResources -> Team -> User -> IO ChatState
 initializeState cr myTeam me = do
   let session = getResourceSession cr
-      requestChan = cr^.crMutable.mutRequestQueue
+      requestChan = cr^.crMutable.to mutRequestQueue
       myTId = getId myTeam
 
   -- Create a predicate to find the last selected channel by reading the
@@ -244,13 +244,13 @@ initializeState cr myTeam me = do
   -- Start background worker threads:
   --
   -- * Syntax definition loader
-  startSyntaxMapLoaderThread (cr^.crConfiguration) (cr^.crMutable.mutEventQueue)
+  startSyntaxMapLoaderThread (cr^.crConfiguration) (cr^.crMutable.to mutEventQueue)
 
   -- * Main async queue worker thread
-  startAsyncWorkerThread (cr^.crConfiguration) (cr^.crMutable.mutRequestQueue) (cr^.crMutable.mutEventQueue)
+  startAsyncWorkerThread (cr^.crConfiguration) (cr^.crMutable.to mutRequestQueue) (cr^.crMutable.to mutEventQueue)
 
   -- * User status refresher
-  startUserRefreshThread (cr^.crMutable.mutUserIdSet) (cr^.crMutable.mutUserStatusLock) session requestChan
+  startUserRefreshThread (cr^.crMutable.to mutUserIdSet) (cr^.crMutable.to mutUserStatusLock) session requestChan
 
   -- * Refresher for users who are typing currently
   when (configShowTypingIndicator (cr^.crConfiguration)) $
@@ -260,10 +260,10 @@ initializeState cr myTeam me = do
   startTimezoneMonitorThread tz requestChan
 
   -- * Subprocess logger
-  startSubprocessLoggerThread (cr^.crMutable.mutSubprocessLog) requestChan
+  startSubprocessLoggerThread (cr^.crMutable.to mutSubprocessLog) requestChan
 
   -- * Spell checker and spell check timer, if configured
-  spResult <- maybeStartSpellChecker (cr^.crConfiguration) (cr^.crMutable.mutEventQueue)
+  spResult <- maybeStartSpellChecker (cr^.crConfiguration) (cr^.crMutable.to mutEventQueue)
 
   -- End thread startup ----------------------------------------------
 
@@ -286,6 +286,6 @@ initializeState cr myTeam me = do
   loadFlaggedMessages (cr^.crUserPreferences.userPrefFlaggedPostList) st
 
   -- Trigger an initial websocket refresh
-  writeBChan (cr^.crMutable.mutEventQueue) RefreshWebsocketEvent
+  writeBChan (cr^.crMutable.to mutEventQueue) RefreshWebsocketEvent
 
   return st
