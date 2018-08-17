@@ -172,9 +172,23 @@ setupState mLogLocation initialConfig = do
 
   requestChan <- STM.atomically STM.newTChan
 
-  let cr = ChatResources session cd requestChan eventChan
-             slc wac (themeToAttrMap custTheme) userStatusLock
-             userIdSet config mempty userPrefs mempty logMgr
+  let cr = ChatResources { _crTheme               = themeToAttrMap custTheme
+                         , _crConfiguration       = config
+                         , _crFlaggedPosts        = mempty
+                         , _crUserPreferences     = userPrefs
+                         , _crSyntaxMap           = undefined
+                         , _crMutable             = mut
+                         }
+      mut = MutableResources { _mutSession             = session
+                             , _mutConn                = cd
+                             , _mutRequestQueue        = requestChan
+                             , _mutEventQueue          = eventChan
+                             , _mutSubprocessLog       = slc
+                             , _mutWebsocketActionChan = wac
+                             , _mutUserStatusLock      = userStatusLock
+                             , _mutUserIdSet           = userIdSet
+                             , _mutLogManager          = logMgr
+                             }
 
   st <- initializeState cr myTeam me
 
@@ -188,7 +202,7 @@ setupState mLogLocation initialConfig = do
 initializeState :: ChatResources -> Team -> User -> IO ChatState
 initializeState cr myTeam me = do
   let session = getResourceSession cr
-      requestChan = cr^.crRequestQueue
+      requestChan = cr^.crMutable.mutRequestQueue
       myTId = getId myTeam
 
   -- Create a predicate to find the last selected channel by reading the
@@ -230,13 +244,13 @@ initializeState cr myTeam me = do
   -- Start background worker threads:
   --
   -- * Syntax definition loader
-  startSyntaxMapLoaderThread (cr^.crConfiguration) (cr^.crEventQueue)
+  startSyntaxMapLoaderThread (cr^.crConfiguration) (cr^.crMutable.mutEventQueue)
 
   -- * Main async queue worker thread
-  startAsyncWorkerThread (cr^.crConfiguration) (cr^.crRequestQueue) (cr^.crEventQueue)
+  startAsyncWorkerThread (cr^.crConfiguration) (cr^.crMutable.mutRequestQueue) (cr^.crMutable.mutEventQueue)
 
   -- * User status refresher
-  startUserRefreshThread (cr^.crUserIdSet) (cr^.crUserStatusLock) session requestChan
+  startUserRefreshThread (cr^.crMutable.mutUserIdSet) (cr^.crMutable.mutUserStatusLock) session requestChan
 
   -- * Refresher for users who are typing currently
   when (configShowTypingIndicator (cr^.crConfiguration)) $
@@ -246,10 +260,10 @@ initializeState cr myTeam me = do
   startTimezoneMonitorThread tz requestChan
 
   -- * Subprocess logger
-  startSubprocessLoggerThread (cr^.crSubprocessLog) requestChan
+  startSubprocessLoggerThread (cr^.crMutable.mutSubprocessLog) requestChan
 
   -- * Spell checker and spell check timer, if configured
-  spResult <- maybeStartSpellChecker (cr^.crConfiguration) (cr^.crEventQueue)
+  spResult <- maybeStartSpellChecker (cr^.crConfiguration) (cr^.crMutable.mutEventQueue)
 
   -- End thread startup ----------------------------------------------
 
@@ -272,6 +286,6 @@ initializeState cr myTeam me = do
   loadFlaggedMessages (cr^.crUserPreferences.userPrefFlaggedPostList) st
 
   -- Trigger an initial websocket refresh
-  writeBChan (cr^.crEventQueue) RefreshWebsocketEvent
+  writeBChan (cr^.crMutable.mutEventQueue) RefreshWebsocketEvent
 
   return st

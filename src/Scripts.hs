@@ -21,7 +21,7 @@ import           Types
 findAndRunScript :: Text -> Text -> MH ()
 findAndRunScript scriptName input = do
     fpMb <- liftIO $ locateScriptPath (T.unpack scriptName)
-    outputChan <- use (csResources.crSubprocessLog)
+    outputChan <- use (csResources.crMutable.mutSubprocessLog)
     case fpMb of
       ScriptPath scriptPath -> do
         doAsyncWith Preempt $ runScript outputChan scriptPath input

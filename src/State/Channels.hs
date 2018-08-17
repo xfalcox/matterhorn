@@ -196,8 +196,8 @@ refreshChannelsAndUsers = do
       return $ do
           asyncFetchAllUsers 0 mempty $ do
               forM_ chansWithData $ uncurry refreshChannel
-              lock <- use (csResources.crUserStatusLock)
-              setVar <- use (csResources.crUserIdSet)
+              lock <- use (csResources.crMutable.mutUserStatusLock)
+              setVar <- use (csResources.crMutable.mutUserIdSet)
               doAsyncWith Preempt $ updateUserStatuses setVar lock session
 
 -- | Refresh information about a specific channel.  The channel

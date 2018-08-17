@@ -46,7 +46,7 @@ runMatterhorn opts config = do
           Vty.setMode output Vty.Hyperlink $ configHyperlinkingMode config
           return vty
 
-    finalSt <- customMain mkVty (Just $ st^.csResources.crEventQueue) app st
+    finalSt <- customMain mkVty (Just $ st^.csResources.crMutable.mutEventQueue) app st
 
     case finalSt^.csEditState.cedSpellChecker of
         Nothing -> return ()
@@ -66,7 +66,7 @@ closeMatterhorn finalSt = do
   logIfError (writeLastRunState finalSt)
       "Error in writing last run state"
 
-  shutdownLogManager $ finalSt^.csResources.crLogManager
+  shutdownLogManager $ finalSt^.csResources.crMutable.mutLogManager
 
   where
     logIfError action msg = do

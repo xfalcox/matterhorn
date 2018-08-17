@@ -60,8 +60,8 @@ makeLenses ''LastRunState
 
 toLastRunState :: ChatState -> LastRunState
 toLastRunState cs = LastRunState
-  { _lrsHost              = cs^.csResources.crConn.cdHostnameL
-  , _lrsPort              = cs^.csResources.crConn.cdPortL
+  { _lrsHost              = cs^.csResources.crMutable.mutConn.cdHostnameL
+  , _lrsPort              = cs^.csResources.crMutable.mutConn.cdPortL
   , _lrsUserId            = myUserId cs
   , _lrsSelectedChannelId = cs^.csCurrentChannelId
   }
@@ -94,6 +94,6 @@ readLastRunState tId = runExceptT $ do
 -- | Checks if the given last run state is valid for the current server and user.
 isValidLastRunState :: ChatResources -> User -> LastRunState -> Bool
 isValidLastRunState cr me rs =
-     rs^.lrsHost   == cr^.crConn.cdHostnameL
-  && rs^.lrsPort   == cr^.crConn.cdPortL
+     rs^.lrsHost   == cr^.crMutable.mutConn.cdHostnameL
+  && rs^.lrsPort   == cr^.crMutable.mutConn.cdPortL
   && rs^.lrsUserId == me^.userIdL

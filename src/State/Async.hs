@@ -101,7 +101,7 @@ doAsyncWith prio act = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
           Normal  -> STM.writeTChan
-    queue <- use (csResources.crRequestQueue)
+    queue <- use (csResources.crMutable.mutRequestQueue)
     liftIO $ STM.atomically $ putChan queue act
 
 doAsyncIO :: AsyncPriority -> ChatState -> IO () -> IO ()
@@ -115,7 +115,7 @@ doAsyncWithIO prio st act = do
     let putChan = case prio of
           Preempt -> STM.unGetTChan
           Normal  -> STM.writeTChan
-    let queue = st^.csResources.crRequestQueue
+    let queue = st^.csResources.crMutable.mutRequestQueue
     STM.atomically $ putChan queue act
 
 -- | Performs an asynchronous IO operation. On completion, the final

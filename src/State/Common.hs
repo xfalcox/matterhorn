@@ -137,7 +137,7 @@ openURL link = do
             -- Matterhorn interactively.
             case configURLOpenCommandInteractive cfg of
                 False -> do
-                    outputChan <- use (csResources.crSubprocessLog)
+                    outputChan <- use (csResources.crMutable.mutSubprocessLog)
                     doAsyncWith Preempt $ do
                         args <- act
                         runLoggedCommand False outputChan (T.unpack urlOpenCommand)

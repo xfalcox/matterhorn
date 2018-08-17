@@ -108,20 +108,24 @@ module Types
 
   , listFromUserSearchResults
 
-  , ChatResources(ChatResources)
+  , ChatResources(..)
   , crUserPreferences
-  , crEventQueue
   , crTheme
-  , crSubprocessLog
-  , crWebsocketActionChan
-  , crRequestQueue
-  , crUserStatusLock
-  , crUserIdSet
   , crFlaggedPosts
-  , crConn
   , crConfiguration
   , crSyntaxMap
-  , crLogManager
+  , crMutable
+
+  , MutableResources(..)
+  , mutSubprocessLog
+  , mutEventQueue
+  , mutWebsocketActionChan
+  , mutRequestQueue
+  , mutUserStatusLock
+  , mutUserIdSet
+  , mutConn
+  , mutLogManager
+
   , getSession
   , getResourceSession
 
@@ -618,22 +622,25 @@ sendLogCommand mgr c =
 -- to information that we read or set up prior to setting up the bulk of
 -- the application state.
 data ChatResources =
-    ChatResources { _crSession             :: Session
-                  , _crConn                :: ConnectionData
-                  , _crRequestQueue        :: RequestChan
-                  , _crEventQueue          :: BChan MHEvent
-                  , _crSubprocessLog       :: STM.TChan ProgramOutput
-                  , _crWebsocketActionChan :: STM.TChan WebsocketAction
-                  , _crTheme               :: AttrMap
-                  , _crUserStatusLock      :: MVar ()
-                  , _crUserIdSet           :: STM.TVar (Seq UserId)
+    ChatResources { _crTheme               :: AttrMap
                   , _crConfiguration       :: Config
                   , _crFlaggedPosts        :: Set PostId
                   , _crUserPreferences     :: UserPreferences
                   , _crSyntaxMap           :: SyntaxMap
-                  , _crLogManager          :: LogManager
+                  , _crMutable             :: MutableResources
                   }
 
+data MutableResources =
+    MutableResources { _mutSession             :: Session
+                     , _mutConn                :: ConnectionData
+                     , _mutRequestQueue        :: RequestChan
+                     , _mutEventQueue          :: BChan MHEvent
+                     , _mutSubprocessLog       :: STM.TChan ProgramOutput
+                     , _mutWebsocketActionChan :: STM.TChan WebsocketAction
+                     , _mutUserStatusLock      :: MVar ()
+                     , _mutUserIdSet           :: STM.TVar (Seq UserId)
+                     , _mutLogManager          :: LogManager
+                     }
 
 -- | The 'ChatEditState' value contains the editor widget itself as well
 -- as history and metadata we need for editing-related operations.
@@ -953,7 +960,7 @@ mhLog cat msg = do
 mhGetIOLogger :: MH (LogCategory -> Text -> IO ())
 mhGetIOLogger = do
     ctx <- getLogContext
-    mgr <- use (to (_crLogManager . _csResources))
+    mgr <- use (to (_mutLogManager . _crMutable . _csResources))
     return $ \cat msg -> do
         now <- liftIO getCurrentTime
         let lm = LogMessage { logMessageText = msg
@@ -1084,6 +1091,7 @@ data MHError =
 -- ** Application State Lenses
 
 makeLenses ''ChatResources
+makeLenses ''MutableResources
 makeLenses ''ChatState
 makeLenses ''ChatEditState
 makeLenses ''PostListOverlayState
@@ -1092,10 +1100,10 @@ makeLenses ''ChannelSelectState
 makeLenses ''UserPreferences
 
 getSession :: MH Session
-getSession = use (csResources.crSession)
+getSession = use (csResources.crMutable.mutSession)
 
 getResourceSession :: ChatResources -> Session
-getResourceSession = _crSession
+getResourceSession = _mutSession._crMutable
 
 whenMode :: Mode -> MH () -> MH ()
 whenMode m act = do
@@ -1144,7 +1152,7 @@ withChannelOrDefault cId deflt mote = do
 
 raiseInternalEvent :: InternalEvent -> MH ()
 raiseInternalEvent ev = do
-    queue <- use (csResources.crEventQueue)
+    queue <- use (csResources.crMutable.mutEventQueue)
     St.liftIO $ writeBChan queue (IEvent ev)
 
 -- | Log and raise an error.
@@ -1244,12 +1252,12 @@ addNewUser u = do
     csNames.cnUsers %= (sort . (uname:))
     csNames.cnToUserId.at uname .= Just uid
 
-    userSet <- use (csResources.crUserIdSet)
+    userSet <- use (csResources.crMutable.mutUserIdSet)
     St.liftIO $ STM.atomically $ STM.modifyTVar userSet $ (uid Seq.<|)
 
 setUserIdSet :: Seq UserId -> MH ()
 setUserIdSet ids = do
-    userSet <- use (csResources.crUserIdSet)
+    userSet <- use (csResources.crMutable.mutUserIdSet)
     St.liftIO $ STM.atomically $ STM.writeTVar userSet ids
 
 addChannelName :: Type -> ChannelId -> Text -> MH ()
