@@ -1,5 +1,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module Types.Posts
   ( ClientMessage
   , newClientMessage
@@ -50,10 +52,12 @@ import           Prelude.MH
 
 import           Cheapskate ( Blocks )
 import qualified Cheapskate as C
+import qualified Data.Aeson as A
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import           Data.Time.Clock ( getCurrentTime )
+import           GHC.Generics
 import           Lens.Micro.Platform ( makeLenses )
 
 import           Network.Mattermost.Lenses
@@ -93,7 +97,7 @@ data ClientMessageType =
     | DateTransition
     | NewMessagesTransition
     | UnknownGap  -- ^ marks region where server may have messages unknown locally
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- ** 'ClientMessage' Lenses
 
@@ -127,7 +131,7 @@ data Attachment = Attachment
   { _attachmentName   :: Text
   , _attachmentURL    :: Text
   , _attachmentFileId :: FileId
-  } deriving (Eq, Show)
+  } deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 mkAttachment :: Text -> Text -> FileId -> Attachment
 mkAttachment = Attachment
@@ -140,7 +144,7 @@ data ClientPostType =
     | Join
     | Leave
     | TopicChange
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- ** Creating 'ClientPost' Values
 

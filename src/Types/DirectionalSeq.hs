@@ -14,6 +14,7 @@ module Types.DirectionalSeq where
 import           Prelude ()
 import           Prelude.MH
 
+import qualified Data.Aeson as A
 import qualified Data.Sequence as Seq
 
 
@@ -26,6 +27,12 @@ instance SeqDirection Retrograde
 data SeqDirection dir => DirectionalSeq dir a =
     DSeq { dseq :: Seq a }
          deriving (Show, Functor, Foldable, Traversable)
+
+instance (A.ToJSON a) => A.ToJSON (DirectionalSeq dir a) where
+    toJSON (DSeq s) = A.toJSON s
+
+instance (A.FromJSON a) => A.FromJSON (DirectionalSeq dir a) where
+    parseJSON = fmap DSeq . A.parseJSON
 
 emptyDirSeq :: DirectionalSeq dir a
 emptyDirSeq = DSeq mempty

@@ -3,6 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 {-|
 
@@ -96,10 +97,12 @@ import           Prelude.MH
 
 import           Cheapskate ( Blocks )
 import qualified Cheapskate as C
+import qualified Data.Aeson as A
 import qualified Data.Foldable as F
 import           Data.Hashable ( Hashable )
 import qualified Data.Map.Strict as Map
 import           Data.Sequence as Seq
+import qualified Data.Text as T
 import           Data.Tuple
 import           Data.UUID ( UUID )
 import           GHC.Generics ( Generic )
@@ -117,7 +120,7 @@ import           Types.Posts
 
 data MessageId = MessagePostId PostId
                | MessageUUID UUID
-               deriving (Eq, Read, Show, Generic, Hashable)
+               deriving (Eq, Read, Show, Generic, Hashable, A.FromJSON, A.ToJSON)
 
 messageIdPostId :: MessageId -> Maybe PostId
 messageIdPostId (MessagePostId p) = Just p
@@ -140,7 +143,22 @@ data Message = Message
   , _mOriginalPost  :: Maybe Post
   , _mFlagged       :: Bool
   , _mChannelId     :: Maybe ChannelId
-  } deriving (Show)
+  } deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
+deriving instance Read C.Block
+deriving instance Read C.Inline
+deriving instance Read C.ListType
+deriving instance Read C.NumWrapper
+deriving instance Read C.CodeAttr
+
+instance A.ToJSON C.Block where
+    toJSON = A.toJSON . show
+
+instance A.FromJSON C.Block where
+    parseJSON = A.withText "Block" $ \t ->
+        case readMaybe (T.unpack t) of
+            Nothing -> fail "Invalid Markdown block"
+            Just b -> return b
 
 isPostMessage :: Message -> Bool
 isPostMessage m =
@@ -184,20 +202,20 @@ isGap m = _mType m == C UnknownGap
 --   the union of both kinds of post types.
 data MessageType = C ClientMessageType
                  | CP ClientPostType
-                 deriving (Eq, Show)
+                 deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | There may be no user (usually an internal message), a reference
 -- to a user (by Id), or the server may have supplied a specific
 -- username (often associated with bots).
 data UserRef = NoUser | UserI UserId | UserOverride Text
-               deriving (Eq, Show, Ord)
+               deriving (Eq, Show, Ord, Generic, A.FromJSON, A.ToJSON)
 
 -- | The 'ReplyState' of a message represents whether a message
 --   is a reply, and if so, to what message
 data ReplyState =
     NotAReply
     | InReplyTo PostId
-    deriving (Show)
+    deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | This type represents links to things in the 'open links' view.
 data LinkChoice =

@@ -718,7 +718,7 @@ data HelpScreen =
     | ThemeHelp
     | SyntaxHighlightHelp
     | KeybindingHelp
-    deriving (Eq)
+    deriving (Eq, Generic, A.FromJSON, A.ToJSON)
 
 -- | Help topics
 data HelpTopic =
@@ -727,7 +727,7 @@ data HelpTopic =
               , helpTopicScreen       :: HelpScreen
               , helpTopicViewportName :: Name
               }
-              deriving (Eq)
+              deriving (Eq, Generic, A.FromJSON, A.ToJSON)
 
 -- | Mode type for the current contents of the post list overlay
 data PostListContents =
