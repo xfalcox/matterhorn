@@ -30,10 +30,13 @@ source-repository    head
   type: git
   location: https://github.com/matterhorn-chat/matterhorn.git
 
-executable matterhorn
+library
   hs-source-dirs:      src
-  main-is:             Main.hs
-  other-modules:       Config
+  default-extensions:  OverloadedStrings,
+                       ScopedTypeVariables,
+                       NoImplicitPrelude
+  ghc-options:         -Wall
+  exposed-modules:     Config
                        Command
                        Connection
                        Completion
@@ -110,10 +113,6 @@ executable matterhorn
                        Options
                        Util
                        Paths_matterhorn
-  default-extensions:  OverloadedStrings,
-                       ScopedTypeVariables,
-                       NoImplicitPrelude
-  ghc-options:         -Wall -threaded -with-rtsopts=-I0
   build-depends:       base                 >=4.8     && <5
                      , mattermost-api       == 40900.1.0
                      , base-compat          >= 0.9    && < 0.11
@@ -158,187 +157,55 @@ executable matterhorn
                      , random               >= 1.1     && < 1.2
   default-language:    Haskell2010
 
+executable matterhorn
+  hs-source-dirs:      programs
+  main-is:             Main.hs
+  ghc-options:         -Wall -threaded -with-rtsopts=-I0
+  default-language:    Haskell2010
+  build-depends:       base
+                     , matterhorn
+
 test-suite test_messages
   type:               exitcode-stdio-1.0
   main-is:            test_messages.hs
   other-modules:      Cheapskate_QCA
                     , Message_QCA
-                    , TimeUtils
-                    , Types.Messages
-                    , Types.Posts
-                    , Types.Common
-                    , Types.DirectionalSeq
-                    , Prelude.MH
   default-language:   Haskell2010
   default-extensions: OverloadedStrings
                     , ScopedTypeVariables
   ghc-options:        -Wall -fno-warn-orphans
-  hs-source-dirs:     src, test
+  hs-source-dirs:     test
   build-depends:      base
-                    , aeson
-                    , base-compat
-                    , brick
-                    , bytestring
+                    , matterhorn
                     , cheapskate
-                    , checkers             >= 0.4    && < 0.5
-                    , config-ini
-                    , connection
                     , containers
-                    , directory
-                    , filepath
-                    , hashable
-                    , Hclip
                     , mattermost-api
+                    , bytestring
+                    , uuid
+                    , time
+                    , text
+                    , checkers             >= 0.4    && < 0.5
                     , mattermost-api-qc    == 40900.1.0
-                    , microlens-platform
-                    , mtl
-                    , process
                     , quickcheck-text      >= 0.1    && < 0.2
-                    , stm
-                    , strict
                     , string-conversions   >= 0.4    && < 0.5
                     , tasty                >= 0.11   && < 1.2
                     , tasty-hunit          >= 0.9    && < 0.12
                     , tasty-quickcheck     >= 0.8    && < 0.12
-                    , text
-                    , text-zipper
-                    , time
-                    , timezone-olson
-                    , timezone-series
-                    , transformers
                     , Unique               >= 0.4    && < 0.5
-                    , unordered-containers
                     , vector               <= 0.12.0.1
-                    , vty
-                    , xdg-basedir
-                    , semigroups
-                    , uuid
 
 test-suite matterhorn-benchmark-draw
   type:               exitcode-stdio-1.0
   main-is:            BenchmarkDraw.hs
-  hs-source-dirs:     src, test
+  hs-source-dirs:     test
   default-language:   Haskell2010
   ghc-options:        -Wall
   default-extensions:  OverloadedStrings,
                        ScopedTypeVariables
-  other-modules:       Config
-                       Command
-                       Connection
-                       Completion
-                       App
-                       Clipboard
-                       Constants
-                       State.Async
-                       State.Channels
-                       State.ChannelScroll
-                       State.ChannelSelect
-                       State.Common
-                       State.Editing
-                       State.Flagging
-                       State.Help
-                       State.Logging
-                       State.Messages
-                       State.MessageSelect
-                       State.PostListOverlay
-                       State.Reactions
-                       State.Setup
-                       State.Setup.Threads
-                       State.Setup.Threads.Logging
-                       State.Themes
-                       State.UrlSelect
-                       State.UserListOverlay
-                       State.Users
-                       Zipper
-                       Themes
-                       Draw
-                       Draw.Main
-                       Draw.Messages
-                       Draw.ChannelList
-                       Draw.ShowHelp
-                       Draw.LeaveChannelConfirm
-                       Draw.DeleteChannelConfirm
-                       Draw.PostListOverlay
-                       Draw.UserListOverlay
-                       Draw.JoinChannel
-                       Draw.Util
-                       Draw.ViewMessage
-                       InputHistory
-                       IOUtil
-                       Events
-                       Events.Keybindings
-                       Events.ShowHelp
-                       Events.MessageSelect
-                       Events.Main
-                       Events.JoinChannel
-                       Events.ChannelScroll
-                       Events.ChannelSelect
-                       Events.PostListOverlay
-                       Events.UrlSelect
-                       Events.UserListOverlay
-                       Events.LeaveChannelConfirm
-                       Events.DeleteChannelConfirm
-                       Events.ViewMessage
-                       HelpTopics
-                       LastRunState
-                       Scripts
-                       TimeUtils
-                       Prelude.MH
-                       Types
-                       Types.Channels
-                       Types.Common
-                       Types.DirectionalSeq
-                       Types.KeyEvents
-                       Types.Messages
-                       Types.Users
-                       Types.Posts
-                       FilePaths
-                       TeamSelect
-                       Login
-                       Markdown
-                       Options
-                       Util
-                       Paths_matterhorn
   build-depends:      base
-                    , base-compat
                     , aeson
                     , brick
                     , bytestring
+                    , matterhorn
                     -- TODO NEEDS CONSTRAINTS
                     , criterion
-                    , text
-                    , containers
-                    , unordered-containers
-                    , microlens-platform
-                    , timezone-olson
-                    , timezone-series
-                    , time
-                    , mtl
-                    , transformers
-                    , text-zipper
-                    , vty
-                    , aspell-pipe
-                    , directory
-                    , xdg-basedir
-                    , filepath
-                    , mattermost-api
-                    , strict
-                    , vector
-                    , unix
-                    , skylighting-core
-                    , hashable
-                    , brick-skylighting
-                    , cheapskate
-                    , uuid
-                    , random
-                    , connection
-                    , stm
-                    , async
-                    , process
-                    , gitrev
-                    , config-ini
-                    , utf8-string
-                    , temporary
-                    , stm-delay
-                    , Hclip
-                    , word-wrap
