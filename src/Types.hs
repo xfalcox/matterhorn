@@ -1182,9 +1182,9 @@ setMode' m st = st & csMode .~ m
 appMode :: ChatState -> Mode
 appMode = _csMode
 
-resetSpellCheckTimer :: ChatEditState -> IO ()
+resetSpellCheckTimer :: ChatState -> IO ()
 resetSpellCheckTimer s =
-    case s^.cedSpellChecker of
+    case s^.csResources.crMutable.to mutSpellChecker of
         Nothing -> return ()
         Just (_, reset) -> reset
 
