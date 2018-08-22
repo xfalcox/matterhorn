@@ -225,7 +225,7 @@ data LinkChoice =
                , _linkName   :: Text
                , _linkURL    :: Text
                , _linkFileId :: Maybe FileId
-               } deriving (Eq, Show)
+               } deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 makeLenses ''LinkChoice
 

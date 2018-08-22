@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -101,6 +102,8 @@ module Types
 
   , UserSearchScope(..)
 
+  , UserListActivateType(..)
+
   , UserListOverlayState
   , userListSearchResults
   , userListSearchInput
@@ -108,7 +111,7 @@ module Types
   , userListSearching
   , userListRequestingMore
   , userListHasAllResults
-  , userListEnterHandler
+  , userListActivateType
 
   , listFromUserSearchResults
 
@@ -225,7 +228,7 @@ import qualified Brick
 import           Brick ( EventM, Next )
 import           Brick.AttrMap ( AttrMap )
 import           Brick.BChan
-import           Brick.Widgets.Edit ( Editor, editor, editorText, editContentsL, applyEdit )
+import           Brick.Widgets.Edit ( Editor, editor, editorText, editContentsL, applyEdit, editorName )
 import           Brick.Widgets.List ( List, list )
 import           Control.Concurrent.Async ( Async )
 import           Control.Concurrent.MVar ( MVar )
@@ -245,11 +248,12 @@ import           Data.Time.Clock ( UTCTime, getCurrentTime )
 import           Data.UUID ( UUID )
 import qualified Data.Vector as Vec
 import           GHC.Generics ( Generic )
+import           Graphics.Vty ( Attr )
 import           Lens.Micro.Platform ( at, makeLenses, lens, (%~), (^?!), (.=)
                                      , (%=), (^?), (.~)
                                      , _Just, Traversal', preuse, (^..), folded, to, view )
 import           Network.Connection ( HostNotResolved, HostCannotConnect )
-import           Skylighting.Types ( SyntaxMap, Syntax )
+import           Skylighting.Types ( SyntaxMap, Syntax, Context, Rule, ContextSwitch, Matcher, WordSet, KeywordAttr )
 import           System.Exit ( ExitCode )
 import           System.Random ( randomIO )
 import           Text.Aspell ( Aspell )
@@ -620,8 +624,39 @@ sendLogCommand mgr c =
 deriving instance A.ToJSON Syntax
 deriving instance A.FromJSON Syntax
 
+deriving instance A.ToJSON Context
+deriving instance A.FromJSON Context
+
+deriving instance A.ToJSON KeywordAttr
+deriving instance A.FromJSON KeywordAttr
+
+deriving instance A.ToJSON (WordSet T.Text)
+deriving instance A.FromJSON (WordSet T.Text)
+
+deriving instance A.ToJSON ContextSwitch
+deriving instance A.FromJSON ContextSwitch
+
+deriving instance A.ToJSON Matcher
+deriving instance A.FromJSON Matcher
+
+deriving instance A.ToJSON Rule
+deriving instance A.FromJSON Rule
+
 deriving instance A.ToJSON AttrMap
 deriving instance A.FromJSON AttrMap
+
+deriving instance A.ToJSON Brick.AttrName
+deriving instance A.ToJSONKey Brick.AttrName
+deriving instance A.FromJSON Brick.AttrName
+deriving instance A.FromJSONKey Brick.AttrName
+
+instance A.ToJSON Attr where
+    toJSON = A.toJSON . show
+
+instance A.FromJSON Attr where
+    parseJSON = A.withText "Attr" $ \t -> case readMaybe (T.unpack t) of
+        Nothing -> fail "Invalid Attr"
+        Just a -> return a
 
 -- | 'ChatResources' represents configuration and connection-related
 -- information, as opposed to current model or view information.
@@ -762,12 +797,12 @@ data Mode =
 data ConnectionStatus = Connected | Disconnected
                       deriving (Generic, A.FromJSON, A.ToJSON)
 
-instance (A.ToJSON t, A.ToJSON n) => A.ToJSON (Editor t n) where
+instance A.ToJSON (Editor T.Text Name) where
     toJSON e =
         let z = e^.editContentsL
         in A.object [ "contents" A..= getText z
                     , "cursor" A..= cursorPosition z
-                    , "name" A..= Brick.getName e
+                    , "name" A..= editorName e
                     , "limit" A..= getLineLimit z
                     ]
 
@@ -910,7 +945,7 @@ nullUserListOverlayState =
                          , _userListSearching      = False
                          , _userListRequestingMore = False
                          , _userListHasAllResults  = False
-                         , _userListEnterHandler   = const $ return False
+                         , _userListActivateType   = DoNothing
                          }
 
 listFromUserSearchResults :: Vec.Vector UserInfo -> List Name UserInfo
@@ -957,6 +992,12 @@ data PostListOverlayState =
                          }
                          deriving (Generic, A.FromJSON, A.ToJSON)
 
+data UserListActivateType =
+    DoNothing
+    | ChangeToChannel
+    | AddToCurrentChannel
+    deriving (Show, Generic, A.FromJSON, A.ToJSON)
+
 -- | The state of the user list overlay.
 data UserListOverlayState =
     UserListOverlayState { _userListSearchResults :: List Name UserInfo
@@ -965,7 +1006,7 @@ data UserListOverlayState =
                          , _userListSearching :: Bool
                          , _userListRequestingMore :: Bool
                          , _userListHasAllResults :: Bool
-                         , _userListEnterHandler :: UserInfo -> MH Bool
+                         , _userListActivateType :: UserListActivateType
                          }
                          deriving (Generic, A.FromJSON, A.ToJSON)
 
