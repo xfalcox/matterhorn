@@ -2,7 +2,9 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Types.Channels
   ( ClientChannel(..)
@@ -47,7 +49,9 @@ where
 import           Prelude ()
 import           Prelude.MH
 
+import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as HM
+import           GHC.Generics ( Generic )
 import           Lens.Micro.Platform ( (%~), (.~), Traversal', Lens'
                                      , makeLenses, ix, at
                                      , to, non )
@@ -82,7 +86,7 @@ data ClientChannel = ClientChannel
     -- ^ A list of 'Message's in the channel
   , _ccInfo     :: ChannelInfo
     -- ^ The 'ChannelInfo' for the channel
-  }
+  } deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- Get a channel's name, depending on its type
 preferredChannelName :: Channel -> Text
@@ -94,7 +98,7 @@ data NewMessageIndicator =
     Hide
     | NewPostsAfterServerTime ServerTime
     | NewPostsStartingAt ServerTime
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 initialChannelInfo :: Channel -> ChannelInfo
 initialChannelInfo chan =
@@ -134,7 +138,7 @@ channelInfoFromChannelWithData chan chanMember ci =
 data ChannelContents = ChannelContents
   { _cdMessages :: Messages
   , _cdFetchPending :: Bool
-  }
+  } deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- | An initial empty 'ChannelContents' value.  This also contains an
 -- UnknownGap, which is a signal that causes actual content fetching.
@@ -176,7 +180,7 @@ data ChannelInfo = ChannelInfo
     -- ^ The user's notification settings for this channel
   , _cdTypingUsers      :: TypingUsers
     -- ^ The users who are currently typing in this channel
-  }
+  } deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- ** Channel-related Lenses
 
@@ -206,7 +210,7 @@ canLeaveChannel cInfo = not $ cInfo^.cdType `elem` [Direct]
 
 -- | Define a binary kinded type to allow derivation of functor.
 newtype AllMyChannels a = AllChannels { _ofChans :: HashMap ChannelId a }
-    deriving (Functor, Foldable, Traversable)
+    deriving (Functor, Foldable, Traversable, Generic, A.FromJSON, A.ToJSON)
 
 -- | Define the exported typename which universally binds the
 -- collection to the ChannelInfo type.

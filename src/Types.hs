@@ -9,6 +9,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Types
   ( ConnectionStatus(..)
   , HelpTopic(..)
@@ -85,7 +86,6 @@ module Types
   , ChatEditState
   , emptyEditState
   , cedYankBuffer
-  , cedSpellChecker
   , cedMisspellings
   , cedEditMode
   , cedCompleter
@@ -225,7 +225,7 @@ import qualified Brick
 import           Brick ( EventM, Next )
 import           Brick.AttrMap ( AttrMap )
 import           Brick.BChan
-import           Brick.Widgets.Edit ( Editor, editor )
+import           Brick.Widgets.Edit ( Editor, editor, editContentsL )
 import           Brick.Widgets.List ( List, list )
 import           Control.Concurrent.Async ( Async )
 import           Control.Concurrent.MVar ( MVar )
@@ -616,6 +616,12 @@ sendLogCommand :: LogManager -> LogCommand -> IO ()
 sendLogCommand mgr c =
     STM.atomically $ STM.writeTChan (logManagerCommandChannel mgr) c
 
+deriving instance A.ToJSON Syntax
+deriving instance A.FromJSON Syntax
+
+deriving instance A.ToJSON AttrMap
+deriving instance A.FromJSON AttrMap
+
 -- | 'ChatResources' represents configuration and connection-related
 -- information, as opposed to current model or view information.
 -- Information that goes in the 'ChatResources' value should be limited
@@ -654,6 +660,7 @@ data MutableResources =
                        , mutUserStatusLock      :: MVar ()
                        , mutUserIdSet           :: STM.TVar (Seq UserId)
                        , mutLogManager          :: LogManager
+                       , mutSpellChecker        :: Maybe (Aspell, IO ())
                        }
 
 instance A.FromJSON MutableResources where
@@ -673,7 +680,6 @@ data ChatEditState =
                   , _cedLastChannelInput     :: HashMap ChannelId (Text, EditMode)
                   , _cedCompleter            :: Maybe Completer
                   , _cedYankBuffer           :: Text
-                  , _cedSpellChecker         :: Maybe (Aspell, IO ())
                   , _cedMisspellings         :: Set Text
                   }
                   deriving (Generic, A.FromJSON, A.ToJSON)
@@ -692,8 +698,8 @@ data EditMode =
 
 -- | We can initialize a new 'ChatEditState' value with just an edit
 -- history, which we save locally.
-emptyEditState :: InputHistory -> Maybe (Aspell, IO ()) -> ChatEditState
-emptyEditState hist sp =
+emptyEditState :: InputHistory -> ChatEditState
+emptyEditState hist =
     ChatEditState { _cedEditor               = editor MessageInput Nothing ""
                   , _cedMultiline            = False
                   , _cedInputHistory         = hist
@@ -702,7 +708,6 @@ emptyEditState hist sp =
                   , _cedCompleter            = Nothing
                   , _cedEditMode             = NewPost
                   , _cedYankBuffer           = ""
-                  , _cedSpellChecker         = sp
                   , _cedMisspellings         = mempty
                   }
 
@@ -755,6 +760,36 @@ data Mode =
 -- | We're either connected or we're not.
 data ConnectionStatus = Connected | Disconnected
                       deriving (Generic, A.FromJSON, A.ToJSON)
+
+instance (A.ToJSON t, A.ToJSON n) => A.ToJSON (Editor t n) where
+    toJSON e =
+        let z = e^.editContentsL
+        in A.object [ "contents" A..= getText z
+                    , "cursor" A..= cursorPosition z
+                    , "name" A..= getName e
+                    , "limit" A..= getLineLimit z
+                    ]
+
+instance (A.FromJSON t, A.FromJSON n) => A.FromJSON (Editor t n) where
+    parseJSON = A.withObject "Editor" $ \o -> do
+        contents <- o A..: "contents"
+        cursor <- o A..: "cursor"
+        name <- o A..: "name"
+        limit <- o A..: "limit"
+        let updateZipper = const $ moveCursor cursor $ textZipper contents limit
+        return $ applyEdit updateZipper (editorText name limit "")
+
+deriving instance A.ToJSON (List n e)
+deriving instance A.FromJSON (List n e)
+
+instance A.FromJSON TimeZoneSeries where
+    parseJSON = A.withText "TimeZoneSeries" $ \t ->
+        case readMaybe (T.unpack t) of
+            Nothing -> fail "Invalid TimeZoneSeries"
+            Just val -> return val
+
+instance A.ToJSON TimeZoneSeries where
+    toJSON = toJSON . show
 
 -- | This is the giant bundle of fields that represents the current
 -- state of our application at any given time. Some of this should be

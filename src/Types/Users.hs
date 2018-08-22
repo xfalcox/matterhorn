@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Types.Users
   ( UserInfo(..)
@@ -37,9 +39,11 @@ where
 import           Prelude ()
 import           Prelude.MH
 
+import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as HM
 import           Data.Semigroup ( Max(..) )
 import qualified Data.Text as T
+import           GHC.Generics ( Generic )
 import           Lens.Micro.Platform ( (%~), makeLenses, ix )
 
 import           Network.Mattermost.Types ( Id(Id), UserId(..), User(..)
@@ -61,7 +65,7 @@ data UserInfo = UserInfo
   , _uiLastName  :: Text
   , _uiEmail     :: Text
   , _uiDeleted   :: Bool
-  } deriving (Eq, Show)
+  } deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | Is this user deleted?
 userDeleted :: User -> Bool
@@ -91,7 +95,7 @@ data UserStatus
   | Offline
   | DoNotDisturb
   | Other Text
-    deriving (Eq, Show)
+    deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 statusFromText :: Text -> UserStatus
 statusFromText t = case t of
@@ -109,7 +113,7 @@ makeLenses ''UserInfo
 
 -- | Define a binary kinded type to allow derivation of functor.
 newtype AllMyUsers a = AllUsers { _ofUsers :: HashMap UserId a }
-    deriving Functor
+    deriving (Functor, Generic, A.ToJSON, A.FromJSON)
 
 makeLenses ''AllMyUsers
 

@@ -1,4 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module InputHistory
   ( InputHistory
   , newHistory
@@ -14,8 +16,10 @@ import           Prelude ()
 import           Prelude.MH
 
 import           Control.Monad.Trans.Except
+import qualified Data.Aeson as A
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector as V
+import           GHC.Generics ( Generic )
 import           Lens.Micro.Platform ( (.~), (^?), (%~), at, ix, makeLenses )
 import           System.Directory ( createDirectoryIfMissing )
 import           System.FilePath ( dropFileName )
@@ -32,7 +36,7 @@ import           IOUtil
 data InputHistory =
     InputHistory { _historyEntries :: HashMap ChannelId (V.Vector Text)
                  }
-                 deriving (Show)
+                 deriving (Show, Generic, A.FromJSON, A.ToJSON)
 
 makeLenses ''InputHistory
 

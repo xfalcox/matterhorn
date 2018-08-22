@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 -- Heavily inspired by tab completion from glirc:
 -- https://github.com/glguy/irc-core/blob/v2/src/Client/Commands/WordCompletion.hs
 module Completion
@@ -13,9 +15,11 @@ where
 import           Prelude ()
 import           Prelude.MH
 
+import qualified Data.Aeson as A
 import           Data.Char ( isSpace )
 import qualified Data.Set as Set
 import qualified Data.Text as T
+import           GHC.Generics ( Generic )
 
 import qualified Zipper as Z
 
@@ -24,7 +28,7 @@ import qualified Zipper as Z
 -- from a sequence of alternatives.
 data Completer =
     Completer { completionAlternatives :: Z.Zipper CompletionAlternative
-              }
+              } deriving (Generic, A.FromJSON, A.ToJSON)
 
 -- A completion alternative is made up of various representations:
 -- the string corresonding to the user input, the string that will
@@ -39,7 +43,7 @@ data CompletionAlternative =
                           , completionReplacement :: Text
                           , completionDisplay :: Text
                           }
-                          deriving (Ord, Eq)
+                          deriving (Ord, Eq, Generic, A.FromJSON, A.ToJSON)
 
 matchesAlternative :: Text -> CompletionAlternative -> Bool
 matchesAlternative input alt =

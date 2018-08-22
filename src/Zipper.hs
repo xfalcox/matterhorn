@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 module Zipper
   ( Zipper
   , fromList
@@ -17,6 +19,8 @@ where
 
 import           Prelude ()
 import           Prelude.MH
+import           GHC.Generics ( Generic )
+import qualified Data.Aeson as A
 
 import qualified Data.Foldable as F
 import           Lens.Micro.Platform ( Lens, lens, ix, (.~) )
@@ -25,7 +29,7 @@ import           Lens.Micro.Platform ( Lens, lens, ix, (.~) )
 data Zipper a = Zipper
   { zFocus :: Int
   , zElems :: [a]
-  }
+  } deriving (Generic, A.FromJSON, A.ToJSON)
 
 instance F.Foldable Zipper where
   foldMap f = foldMap f . zElems
