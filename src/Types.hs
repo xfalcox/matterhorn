@@ -780,8 +780,8 @@ instance (A.FromJSON n) => A.FromJSON (Editor T.Text n) where
         let updateZipper = const $ moveCursor cursor $ textZipper contents limit
         return $ applyEdit updateZipper (editorText name limit "")
 
-deriving instance A.ToJSON (List n e)
-deriving instance A.FromJSON (List n e)
+deriving instance (A.ToJSON n, A.ToJSON e) => A.ToJSON (List n e)
+deriving instance (A.FromJSON n, A.FromJSON e) => A.FromJSON (List n e)
 
 instance A.FromJSON TimeZoneSeries where
     parseJSON = A.withText "TimeZoneSeries" $ \t ->
