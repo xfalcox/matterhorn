@@ -771,7 +771,7 @@ instance (A.ToJSON t, A.ToJSON n) => A.ToJSON (Editor t n) where
                     , "limit" A..= getLineLimit z
                     ]
 
-instance (A.FromJSON t, A.FromJSON n) => A.FromJSON (Editor t n) where
+instance (A.FromJSON n) => A.FromJSON (Editor T.Text n) where
     parseJSON = A.withObject "Editor" $ \o -> do
         contents <- o A..: "contents"
         cursor <- o A..: "cursor"
