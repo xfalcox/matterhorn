@@ -49,7 +49,7 @@ runMatterhorn opts config = do
 
     finalSt <- customMain mkVty (Just $ st^.csResources.crMutable.to mutEventQueue) app st
 
-    case finalSt^.csEditState.cedSpellChecker of
+    case finalSt^.csResources.crMutable.to mutSpellChecker of
         Nothing -> return ()
         Just (s, _) -> stopAspell s
 

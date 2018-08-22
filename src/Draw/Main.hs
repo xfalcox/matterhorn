@@ -91,7 +91,7 @@ data Token =
 drawEditorContents :: ChatState -> HighlightSet -> [Text] -> Widget Name
 drawEditorContents st hs =
     let noHighlight = txt . T.unlines
-    in case st^.csEditState.cedSpellChecker of
+    in case st^.csResources.crMutable.to mutSpellChecker of
         Nothing -> noHighlight
         Just _ ->
             case S.null (st^.csEditState.cedMisspellings) of

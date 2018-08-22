@@ -234,7 +234,7 @@ handleEditingInput e = do
 
         csEditState.cedCompleter .= Nothing
 
-    liftIO $ resetSpellCheckTimer $ st^.csEditState
+    liftIO $ resetSpellCheckTimer st
 
 -- | Send the user_typing action to the server asynchronously, over the connected websocket.
 -- | If the websocket is not connected, drop the action silently.
@@ -258,7 +258,7 @@ sendUserTypingAction = do
 requestSpellCheck :: MH ()
 requestSpellCheck = do
     st <- use id
-    case st^.csEditState.cedSpellChecker of
+    case st^.csResources.crMutable.to mutSpellChecker of
         Nothing -> return ()
         Just (checker, _) -> do
             -- Get the editor contents.

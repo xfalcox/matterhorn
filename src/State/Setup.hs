@@ -172,6 +172,9 @@ setupState mLogLocation initialConfig = do
 
   requestChan <- STM.atomically STM.newTChan
 
+  -- * Spell checker and spell check timer, if configured
+  spResult <- maybeStartSpellChecker config eventChan
+
   let cr = ChatResources { _crTheme               = themeToAttrMap custTheme
                          , _crConfiguration       = config
                          , _crFlaggedPosts        = mempty
@@ -188,6 +191,7 @@ setupState mLogLocation initialConfig = do
                              , mutUserStatusLock      = userStatusLock
                              , mutUserIdSet           = userIdSet
                              , mutLogManager          = logMgr
+                             , mutSpellChecker        = spResult
                              }
 
   st <- initializeState cr myTeam me
@@ -262,9 +266,6 @@ initializeState cr myTeam me = do
   -- * Subprocess logger
   startSubprocessLoggerThread (cr^.crMutable.to mutSubprocessLog) requestChan
 
-  -- * Spell checker and spell check timer, if configured
-  spResult <- maybeStartSpellChecker (cr^.crConfiguration) (cr^.crMutable.to mutEventQueue)
-
   -- End thread startup ----------------------------------------------
 
   let names = mkNames me mempty chans
@@ -277,7 +278,6 @@ initializeState cr myTeam me = do
                            , startupStateTeam           = myTeam
                            , startupStateTimeZone       = tz
                            , startupStateInitialHistory = hist
-                           , startupStateSpellChecker   = spResult
                            , startupStateNames          = names
                            }
       st = newState startupState
