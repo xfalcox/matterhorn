@@ -871,7 +871,6 @@ data StartupStateInfo =
                      , startupStateTeam           :: Team
                      , startupStateTimeZone       :: TimeZoneSeries
                      , startupStateInitialHistory :: InputHistory
-                     , startupStateSpellChecker   :: Maybe (Aspell, IO ())
                      , startupStateNames          :: MMNames
                      }
 
@@ -886,7 +885,7 @@ newState (StartupStateInfo {..}) =
               , _csPostMap                     = HM.empty
               , _csUsers                       = noUsers
               , _timeZone                      = startupStateTimeZone
-              , _csEditState                   = emptyEditState startupStateInitialHistory startupStateSpellChecker
+              , _csEditState                   = emptyEditState startupStateInitialHistory
               , _csMode                        = Main
               , _csShowMessagePreview          = configShowMessagePreview $ _crConfiguration startupStateResources
               , _csChannelSelectState          = emptyChannelSelectState
