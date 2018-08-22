@@ -207,5 +207,4 @@ test-suite matterhorn-benchmark-draw
                     , brick
                     , bytestring
                     , matterhorn
-                    -- TODO NEEDS CONSTRAINTS
-                    , criterion
+                    , criterion            >= 1.4 && < 1.5
