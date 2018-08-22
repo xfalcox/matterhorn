@@ -174,42 +174,42 @@ test-suite test_messages
                     , ScopedTypeVariables
   ghc-options:        -Wall -fno-warn-orphans
   hs-source-dirs:     src, test
-  build-depends:      base                 >=4.7     && <5
-                    , aeson                >= 1.2.3.0 && < 1.3
-                    , base-compat          >= 0.9    && < 0.11
-                    , brick                >= 0.40   && < 0.41
-                    , bytestring           >= 0.10   && < 0.11
-                    , cheapskate           >= 0.1    && < 0.2
+  build-depends:      base
+                    , aeson
+                    , base-compat
+                    , brick
+                    , bytestring
+                    , cheapskate
                     , checkers             >= 0.4    && < 0.5
-                    , config-ini           >= 0.2.2.0 && < 0.3
-                    , connection           >= 0.2    && < 0.3
-                    , containers           >= 0.5.7  && < 0.6
-                    , directory            >= 1.3    && < 1.4
-                    , filepath             >= 1.4    && < 1.5
-                    , hashable             >= 1.2    && < 1.3
-                    , Hclip                >= 3.0    && < 3.1
-                    , mattermost-api       == 40900.1.0
+                    , config-ini
+                    , connection
+                    , containers
+                    , directory
+                    , filepath
+                    , hashable
+                    , Hclip
+                    , mattermost-api
                     , mattermost-api-qc    == 40900.1.0
-                    , microlens-platform   >= 0.3    && < 0.4
-                    , mtl                  >= 2.2    && < 2.3
-                    , process              >= 1.4    && < 1.7
+                    , microlens-platform
+                    , mtl
+                    , process
                     , quickcheck-text      >= 0.1    && < 0.2
-                    , stm                  >= 2.4    && < 2.5
-                    , strict               >= 0.3    && < 0.4
+                    , stm
+                    , strict
                     , string-conversions   >= 0.4    && < 0.5
                     , tasty                >= 0.11   && < 1.2
                     , tasty-hunit          >= 0.9    && < 0.12
                     , tasty-quickcheck     >= 0.8    && < 0.12
-                    , text                 >= 1.2    && < 1.3
-                    , text-zipper          >= 0.10   && < 0.11
-                    , time                 >= 1.6    && < 1.9
-                    , timezone-olson       >= 0.1.7  && < 0.2
-                    , timezone-series      >= 0.1.6.1 && < 0.2
-                    , transformers         >= 0.4    && < 0.6
+                    , text
+                    , text-zipper
+                    , time
+                    , timezone-olson
+                    , timezone-series
+                    , transformers
                     , Unique               >= 0.4    && < 0.5
-                    , unordered-containers >= 0.2    && < 0.3
+                    , unordered-containers
                     , vector               <= 0.12.0.1
-                    , vty                  >= 5.23.1 && < 5.24
-                    , xdg-basedir          >= 0.2    && < 0.3
-                    , semigroups           >= 0.18   && < 0.19
-                    , uuid                 >= 1.3    && < 1.4
+                    , vty
+                    , xdg-basedir
+                    , semigroups
+                    , uuid
