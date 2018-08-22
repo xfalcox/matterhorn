@@ -225,7 +225,7 @@ import qualified Brick
 import           Brick ( EventM, Next )
 import           Brick.AttrMap ( AttrMap )
 import           Brick.BChan
-import           Brick.Widgets.Edit ( Editor, editor, editContentsL )
+import           Brick.Widgets.Edit ( Editor, editor, editorText, editContentsL, applyEdit )
 import           Brick.Widgets.List ( List, list )
 import           Control.Concurrent.Async ( Async )
 import           Control.Concurrent.MVar ( MVar )
@@ -240,6 +240,7 @@ import           Data.List ( partition, sortBy )
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.Text as T
+import           Data.Text.Zipper ( textZipper, getText, getLineLimit, moveCursor, cursorPosition )
 import           Data.Time.Clock ( UTCTime, getCurrentTime )
 import           Data.UUID ( UUID )
 import qualified Data.Vector as Vec
@@ -766,7 +767,7 @@ instance (A.ToJSON t, A.ToJSON n) => A.ToJSON (Editor t n) where
         let z = e^.editContentsL
         in A.object [ "contents" A..= getText z
                     , "cursor" A..= cursorPosition z
-                    , "name" A..= getName e
+                    , "name" A..= Brick.getName e
                     , "limit" A..= getLineLimit z
                     ]
 
@@ -789,7 +790,7 @@ instance A.FromJSON TimeZoneSeries where
             Just val -> return val
 
 instance A.ToJSON TimeZoneSeries where
-    toJSON = toJSON . show
+    toJSON = A.toJSON . show
 
 -- | This is the giant bundle of fields that represents the current
 -- state of our application at any given time. Some of this should be
