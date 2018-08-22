@@ -179,7 +179,7 @@ setupState mLogLocation initialConfig = do
                          , _crConfiguration       = config
                          , _crFlaggedPosts        = mempty
                          , _crUserPreferences     = userPrefs
-                         , _crSyntaxMap           = undefined
+                         , _crSyntaxMap           = mempty
                          , _crMutable             = mut
                          }
       mut = MutableResources { mutSession             = session
