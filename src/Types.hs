@@ -665,7 +665,7 @@ data MutableResources =
                        }
 
 instance A.FromJSON MutableResources where
-    parseJSON = A.withObject "MutableResources" $ const EmptyMutableResources
+    parseJSON = A.withObject "MutableResources" $ const $ return EmptyMutableResources
 
 instance A.ToJSON MutableResources where
     toJSON = const $ A.object []
