@@ -41,12 +41,7 @@ import           Types
 enterChannelMembersUserList :: MH ()
 enterChannelMembersUserList = do
   cId <- use csCurrentChannelId
-  myId <- gets myUserId
-  enterUserListMode (ChannelMembers cId)
-    (\u -> case u^.uiId /= myId of
-      True -> changeChannel (u^.uiName) >> return True
-      False -> return False
-    )
+  enterUserListMode (ChannelMembers cId) ChangeToChannel
 
 -- | Show the user list overlay for showing users that are not members
 -- of the current channel for the purpose of adding them to the
@@ -54,45 +49,45 @@ enterChannelMembersUserList = do
 enterChannelInviteUserList :: MH ()
 enterChannelInviteUserList = do
   cId <- use csCurrentChannelId
-  myId <- gets myUserId
-  enterUserListMode (ChannelNonMembers cId)
-    (\u -> case u^.uiId /= myId of
-      True -> addUserToCurrentChannel (u^.uiName) >> return True
-      False -> return False
-    )
+  enterUserListMode (ChannelNonMembers cId) AddToCurrentChannel
 
 -- | Show the user list overlay for showing all users for the purpose of
 -- starting a direct message channel with another user.
 enterDMSearchUserList :: MH ()
 enterDMSearchUserList = do
-  myId <- gets myUserId
-  enterUserListMode AllUsers
-    (\u -> case u^.uiId /= myId of
-      True -> changeChannel (u^.uiName) >> return True
-      False -> return False
-    )
+  enterUserListMode AllUsers ChangeToChannel
 
 -- | Interact with the currently-selected user (depending on how the
 -- overlay is configured).
 userListActivateCurrent :: MH ()
 userListActivateCurrent = do
   mItem <- L.listSelectedElement <$> use (csUserListOverlay.userListSearchResults)
+  myId <- gets myUserId
   case mItem of
       Nothing -> return ()
       Just (_, user) -> do
-          handler <- use (csUserListOverlay.userListEnterHandler)
-          activated <- handler user
+          ty <- use (csUserListOverlay.userListActivateType)
+          activated <- case ty of
+              DoNothing -> return False
+              ChangeToChannel -> do
+                  case user^.uiId /= myId of
+                      True -> changeChannel (user^.uiName) >> return True
+                      False -> return False
+              AddToCurrentChannel -> do
+                  case user^.uiId /= myId of
+                      True -> addUserToCurrentChannel (user^.uiName) >> return True
+                      False -> return False
           if activated
              then setMode Main
              else return ()
 
 -- | Show the user list overlay with the given search scope, and issue a
 -- request to gather the first search results.
-enterUserListMode :: UserSearchScope -> (UserInfo -> MH Bool) -> MH ()
-enterUserListMode scope enterHandler = do
+enterUserListMode :: UserSearchScope -> UserListActivateType -> MH ()
+enterUserListMode scope ty = do
   csUserListOverlay.userListSearchScope .= scope
   csUserListOverlay.userListSearchInput.E.editContentsL %= Z.clearZipper
-  csUserListOverlay.userListEnterHandler .= enterHandler
+  csUserListOverlay.userListActivateType .= ty
   csUserListOverlay.userListSearching .= False
   csUserListOverlay.userListHasAllResults .= False
   setMode UserListOverlay
@@ -136,7 +131,7 @@ userInfoFromPair u status =
 exitUserListMode :: MH ()
 exitUserListMode = do
   csUserListOverlay.userListSearchResults .= listFromUserSearchResults mempty
-  csUserListOverlay.userListEnterHandler .= (const $ return False)
+  csUserListOverlay.userListActivateType .= DoNothing
   setMode Main
 
 -- | Move the selection up in the user list overlay by one user.
