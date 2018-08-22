@@ -5,6 +5,8 @@ import           Prelude ()
 import           Prelude.MH
 
 import           Brick
+import qualified Data.Aeson as A
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Map as M
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
@@ -134,25 +136,32 @@ onVtyEvent e = do
     -- Even if we aren't showing the help UI when a resize occurs, we
     -- need to invalidate its cache entry anyway in case the new size
     -- differs from the cached size.
-    case e of
-        (Vty.EvResize _ _) -> mh invalidateCache
-        _ -> return ()
+    shouldContinue <- case e of
+        (Vty.EvResize _ _) -> do
+            mh invalidateCache
+            return True
+        (Vty.EvKey (Vty.KChar '\\') [Vty.MCtrl]) -> do
+            st <- get
+            liftIO $ BSL.writeFile "/tmp/matterhorn_state.json" $ A.encode st
+            return False
+        _ -> return True
 
-    mode <- gets appMode
-    case mode of
-        Main                       -> onEventMain e
-        ShowHelp _                 -> onEventShowHelp e
-        ChannelSelect              -> onEventChannelSelect e
-        UrlSelect                  -> onEventUrlSelect e
-        LeaveChannelConfirm        -> onEventLeaveChannelConfirm e
-        JoinChannel                -> onEventJoinChannel e
-        ChannelScroll              -> onEventChannelScroll e
-        MessageSelect              -> onEventMessageSelect e
-        MessageSelectDeleteConfirm -> onEventMessageSelectDeleteConfirm e
-        DeleteChannelConfirm       -> onEventDeleteChannelConfirm e
-        PostListOverlay _          -> onEventPostListOverlay e
-        UserListOverlay            -> onEventUserListOverlay e
-        ViewMessage                -> onEventViewMessage e
+    when shouldContinue $ do
+        mode <- gets appMode
+        case mode of
+            Main                       -> onEventMain e
+            ShowHelp _                 -> onEventShowHelp e
+            ChannelSelect              -> onEventChannelSelect e
+            UrlSelect                  -> onEventUrlSelect e
+            LeaveChannelConfirm        -> onEventLeaveChannelConfirm e
+            JoinChannel                -> onEventJoinChannel e
+            ChannelScroll              -> onEventChannelScroll e
+            MessageSelect              -> onEventMessageSelect e
+            MessageSelectDeleteConfirm -> onEventMessageSelectDeleteConfirm e
+            DeleteChannelConfirm       -> onEventDeleteChannelConfirm e
+            PostListOverlay _          -> onEventPostListOverlay e
+            UserListOverlay            -> onEventUserListOverlay e
+            ViewMessage                -> onEventViewMessage e
 
 handleWSEvent :: WebsocketEvent -> MH ()
 handleWSEvent we = do

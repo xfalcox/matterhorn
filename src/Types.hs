@@ -150,6 +150,7 @@ module Types
   , mhSuspendAndResume
   , mhHandleEventLensed
   , St.gets
+  , St.get
   , mhError
 
   , mhLog
