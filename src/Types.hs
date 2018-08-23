@@ -285,7 +285,20 @@ import           Zipper ( Zipper, focusL, updateList )
 data PasswordSource =
     PasswordString Text
     | PasswordCommand Text
-    deriving (Eq, Read, Show, Generic, A.FromJSON, A.ToJSON)
+    deriving (Eq, Read, Show)
+
+instance A.ToJSON PasswordSource where
+    toJSON (PasswordString _) = A.object ["type" A..= ("string"::String)]
+    toJSON (PasswordCommand cmd) = A.object ["type" A..= ("command"::String), "value" A..= cmd]
+
+instance A.FromJSON PasswordSource where
+    parseJSON = A.withObject "PasswordSource" $ \o -> do
+        ty :: String
+           <- o A..: "type"
+        case ty of
+            "string" -> return $ PasswordString "<<<protected>>>"
+            "command" -> PasswordCommand <$> o A..: "value"
+            _ -> fail "Invalid PasswordSource"
 
 -- | This is how we represent the user's configuration. Most fields
 -- correspond to configuration file settings (see Config.hs) but some
