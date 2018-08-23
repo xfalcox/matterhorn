@@ -255,7 +255,7 @@ import           Lens.Micro.Platform ( at, makeLenses, lens, (%~), (^?!), (.=)
                                      , (%=), (^?), (.~)
                                      , _Just, Traversal', preuse, (^..), folded, to, view )
 import           Network.Connection ( HostNotResolved, HostCannotConnect )
-import           Skylighting.Types ( SyntaxMap, Syntax, Context, Rule, ContextSwitch, Matcher, WordSet, KeywordAttr )
+import           Skylighting.Types ( SyntaxMap )
 import           System.Exit ( ExitCode )
 import           System.Random ( randomIO )
 import           Text.Aspell ( Aspell )
@@ -636,27 +636,6 @@ sendLogCommand :: LogManager -> LogCommand -> IO ()
 sendLogCommand mgr c =
     STM.atomically $ STM.writeTChan (logManagerCommandChannel mgr) c
 
-deriving instance A.ToJSON Syntax
-deriving instance A.FromJSON Syntax
-
-deriving instance A.ToJSON Context
-deriving instance A.FromJSON Context
-
-deriving instance A.ToJSON KeywordAttr
-deriving instance A.FromJSON KeywordAttr
-
-deriving instance A.ToJSON (WordSet T.Text)
-deriving instance A.FromJSON (WordSet T.Text)
-
-deriving instance A.ToJSON ContextSwitch
-deriving instance A.FromJSON ContextSwitch
-
-deriving instance A.ToJSON Matcher
-deriving instance A.FromJSON Matcher
-
-deriving instance A.ToJSON Rule
-deriving instance A.FromJSON Rule
-
 deriving instance A.ToJSON AttrMap
 deriving instance A.FromJSON AttrMap
 
@@ -686,7 +665,28 @@ data ChatResources =
                   , _crSyntaxMap           :: SyntaxMap
                   , _crMutable             :: MutableResources
                   }
-                  deriving (Generic, A.FromJSON, A.ToJSON)
+
+instance A.ToJSON ChatResources where
+    toJSON (ChatResources {..}) =
+        A.object [ "theme" A..= _crTheme
+                 , "config" A..= _crConfiguration
+                 , "flaggedPosts" A..= _crFlaggedPosts
+                 , "prefs" A..= _crUserPreferences
+                 , "syntaxMap" A..= show _crSyntaxMap
+                 ]
+
+instance A.FromJSON ChatResources where
+    parseJSON = A.withObject "ChatResources" $ \o -> do
+        sMapTxt <- o A..: "syntaxMap"
+        case readMaybe sMapTxt of
+            Nothing -> fail "Invalid ChatResources"
+            Just m ->
+                ChatResources <$> o A..: "theme"
+                              <*> o A..: "config"
+                              <*> o A..: "flaggedPosts"
+                              <*> o A..: "prefs"
+                              <*> pure m
+                              <*> pure EmptyMutableResources
 
 -- | Mutable or volatile chat resources. We keep these in their own type
 -- so we can serialize chat states without attempting to serialize
