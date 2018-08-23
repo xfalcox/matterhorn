@@ -1,6 +1,6 @@
 module Main where
 
-import Brick (renderFinal)
+import Brick (renderFinal, resetRenderState)
 import Criterion.Main
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy as BSL
@@ -21,7 +21,7 @@ usage = do
 doDraw :: SerializedState -> Image
 doDraw ss =
     let cs = serializedChatState ss
-        rs = serializedRenderState ss
+        rs = resetRenderState $ serializedRenderState ss
         width = 80
         height = 25
         sz = (width, height)
