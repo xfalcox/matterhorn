@@ -91,14 +91,17 @@ data Token =
 drawEditorContents :: ChatState -> HighlightSet -> [Text] -> Widget Name
 drawEditorContents st hs =
     let noHighlight = txt . T.unlines
-    in case st^.csResources.crMutable.to mutSpellChecker of
-        Nothing -> noHighlight
-        Just _ ->
-            case S.null (st^.csEditState.cedMisspellings) of
-                True -> noHighlight
-                False -> doHighlightMisspellings
-                           hs
-                           (st^.csEditState.cedMisspellings)
+    in case st^.csResources.crMutable of
+        EmptyMutableResources -> noHighlight
+        r@(MutableResources {}) ->
+            case mutSpellChecker r of
+                Nothing -> noHighlight
+                Just _ ->
+                    case S.null (st^.csEditState.cedMisspellings) of
+                        True -> noHighlight
+                        False -> doHighlightMisspellings
+                                   hs
+                                   (st^.csEditState.cedMisspellings)
 
 -- | This function takes a set of misspellings from the spell
 -- checker, the editor lines, and builds a rendering of the text with
