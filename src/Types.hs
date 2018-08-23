@@ -39,6 +39,7 @@ module Types
   , AuthenticationException(..)
   , BackgroundInfo(..)
   , RequestChan
+  , SerializedState(..)
 
   , MMNames
   , mkNames
@@ -1560,3 +1561,24 @@ getEditedMessageCutoff :: ChannelId -> ChatState -> Maybe ServerTime
 getEditedMessageCutoff cId st = do
     cc <- st^?csChannel(cId)
     cc^.ccInfo.cdEditedMessageThreshold
+
+data SerializedState =
+    SerializedState { serializedChatState :: ChatState
+                    , serializedRenderState :: Brick.RenderState Name
+                    }
+
+instance A.ToJSON SerializedState where
+    toJSON s =
+        A.object [ "chatState" A..= serializedChatState s
+                 , "renderState" A..= show (serializedRenderState s)
+                 ]
+
+instance A.FromJSON SerializedState where
+    parseJSON = A.withObject "SerializedState" $ \o -> do
+        cs <- o A..: "chatState"
+        rsStr <- o A..: "renderState"
+        case readMaybe rsStr of
+            Nothing -> fail "Invalid SerializedState"
+            Just rs -> return $ SerializedState { serializedChatState = cs
+                                                , serializedRenderState = rs
+                                                }

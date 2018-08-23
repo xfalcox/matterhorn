@@ -206,5 +206,7 @@ test-suite matterhorn-benchmark-draw
                     , aeson
                     , brick
                     , bytestring
+                    , microlens-platform
+                    , vty
                     , matterhorn
                     , criterion            >= 1.4 && < 1.5

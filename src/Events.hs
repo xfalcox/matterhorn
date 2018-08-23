@@ -142,7 +142,11 @@ onVtyEvent e = do
             return True
         (Vty.EvKey (Vty.KChar '\\') [Vty.MCtrl]) -> do
             st <- get
-            liftIO $ BSL.writeFile "/tmp/matterhorn_state.json" $ A.encode st
+            rs <- mh getRenderState
+            let sstate = SerializedState { serializedChatState = st
+                                         , serializedRenderState = rs
+                                         }
+            liftIO $ BSL.writeFile "/tmp/matterhorn_state.json" $ A.encode sstate
             return False
         _ -> return True
 

@@ -1,9 +1,11 @@
 module Main where
 
-import Brick (render)
+import Brick (renderFinal)
 import Criterion.Main
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy as BSL
+import Graphics.Vty (Image, picImage)
+import Lens.Micro.Platform
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
 
@@ -16,6 +18,16 @@ usage = do
     putStrLn $ "Usage: " <> n <> " <state file>"
     exitFailure
 
+doDraw :: SerializedState -> Image
+doDraw ss =
+    let cs = serializedChatState ss
+        rs = serializedRenderState ss
+        width = 80
+        height = 25
+        sz = (width, height)
+        (_, pic, _, _) = renderFinal (cs^.csResources.crTheme) (draw cs) sz (const Nothing) rs
+    in picImage pic
+
 main :: IO ()
 main = do
     args <- getArgs
@@ -25,11 +37,13 @@ main = do
         _ -> usage
 
     stateBytes <- BSL.readFile stateFilePath
-    state <- case A.eitherDecode stateBytes :: Either String ChatState of
+    loadedState <- case A.eitherDecode stateBytes :: Either String SerializedState of
         Left e -> do
             putStrLn $ "Error decoding state file: " <> e
             exitFailure
         Right s -> return s
 
-    -- defaultMain [bench "draw" $ nf (fmap render . draw) state]
-    putStrLn "Done!"
+    let cases = [ bench "draw" $ nf doDraw loadedState
+                ]
+
+    defaultMain cases
