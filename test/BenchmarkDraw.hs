@@ -22,10 +22,7 @@ doDraw :: SerializedState -> Image
 doDraw ss =
     let cs = serializedChatState ss
         rs = resetRenderState $ serializedRenderState ss
-        width = 80
-        height = 25
-        sz = (width, height)
-        (_, pic, _, _) = renderFinal (cs^.csResources.crTheme) (draw cs) sz (const Nothing) rs
+        (_, pic, _, _) = renderFinal (cs^.csResources.crTheme) (draw cs) (serializedWindowSize ss) (const Nothing) rs
     in picImage pic
 
 main :: IO ()

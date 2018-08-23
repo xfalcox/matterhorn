@@ -143,8 +143,10 @@ onVtyEvent e = do
         (Vty.EvKey (Vty.KChar '\\') [Vty.MCtrl]) -> do
             st <- get
             rs <- mh getRenderState
+            ds <- mh getDisplaySize
             let sstate = SerializedState { serializedChatState = st
                                          , serializedRenderState = rs
+                                         , serializedWindowSize = ds
                                          }
             liftIO $ BSL.writeFile "/tmp/matterhorn_state.json" $ A.encode sstate
             return False

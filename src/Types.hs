@@ -250,7 +250,7 @@ import           Data.Time.Clock ( UTCTime, getCurrentTime )
 import           Data.UUID ( UUID )
 import qualified Data.Vector as Vec
 import           GHC.Generics ( Generic )
-import           Graphics.Vty ( Attr )
+import           Graphics.Vty ( Attr, DisplayRegion )
 import           Lens.Micro.Platform ( at, makeLenses, lens, (%~), (^?!), (.=)
                                      , (%=), (^?), (.~)
                                      , _Just, Traversal', preuse, (^..), folded, to, view )
@@ -1565,20 +1565,24 @@ getEditedMessageCutoff cId st = do
 data SerializedState =
     SerializedState { serializedChatState :: ChatState
                     , serializedRenderState :: Brick.RenderState Name
+                    , serializedWindowSize :: DisplayRegion
                     }
 
 instance A.ToJSON SerializedState where
     toJSON s =
         A.object [ "chatState" A..= serializedChatState s
                  , "renderState" A..= show (serializedRenderState s)
+                 , "windowSize" A..= show (serializedWindowSize s)
                  ]
 
 instance A.FromJSON SerializedState where
     parseJSON = A.withObject "SerializedState" $ \o -> do
         cs <- o A..: "chatState"
         rsStr <- o A..: "renderState"
-        case readMaybe rsStr of
+        sizeStr <- o A..: "windowSize"
+        case (,) <$> readMaybe rsStr <*> readMaybe sizeStr of
             Nothing -> fail "Invalid SerializedState"
-            Just rs -> return $ SerializedState { serializedChatState = cs
-                                                , serializedRenderState = rs
-                                                }
+            Just (rs, ws) -> return $ SerializedState { serializedChatState = cs
+                                                      , serializedRenderState = rs
+                                                      , serializedWindowSize = ws
+                                                      }
