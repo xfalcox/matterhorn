@@ -33,7 +33,7 @@ main = do
     args <- getArgs
 
     stateFilePath <- case args of
-        [p] -> return p
+        (p:_) -> return p
         _ -> usage
 
     stateBytes <- BSL.readFile stateFilePath
