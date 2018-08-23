@@ -457,7 +457,7 @@ data Name =
     | UserListSearchInput
     | UserListSearchResults
     | ViewMessageArea
-    deriving (Eq, Show, Ord, Generic, A.FromJSON, A.ToJSON)
+    deriving (Eq, Show, Read, Ord, Generic, A.FromJSON, A.ToJSON)
 
 -- | The sum type of exceptions we expect to encounter on authentication
 -- failure. We encode them explicitly here so that we can print them in
