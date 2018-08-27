@@ -1,10 +1,11 @@
 module Main where
 
-import Brick (renderFinal, resetRenderState)
+import qualified Brick as B
 import Criterion.Main
+import Criterion.Types (Config(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy as BSL
-import Graphics.Vty (Image, picImage)
+import Graphics.Vty hiding (defaultConfig)
 import Lens.Micro.Platform
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
@@ -18,12 +19,11 @@ usage = do
     putStrLn $ "Usage: " <> n <> " <state file>"
     exitFailure
 
-doDraw :: SerializedState -> Image
-doDraw ss =
+doBuild :: SerializedState -> (B.RenderState Name, Picture, Maybe (B.CursorLocation Name), [B.Extent Name])
+doBuild ss =
     let cs = serializedChatState ss
-        rs = resetRenderState $ serializedRenderState ss
-        (_, pic, _, _) = renderFinal (cs^.csResources.crTheme) (draw cs) (serializedWindowSize ss) (const Nothing) rs
-    in picImage pic
+        rs = B.resetRenderState $ serializedRenderState ss
+    in B.renderFinal (cs^.csResources.crTheme) (draw cs) (serializedWindowSize ss) (const Nothing) rs
 
 main :: IO ()
 main = do
@@ -40,7 +40,17 @@ main = do
             exitFailure
         Right s -> return s
 
-    let cases = [ bench "draw" $ nf doDraw loadedState
-                ]
+    vty <- mkVty =<< standardIOConfig
 
-    defaultMain cases
+    let cases = bgroup "main"
+            [ bench "buildImage" $ nf doBuild loadedState
+            , bench "drawImage" $ nfIO $ do
+                let result@(_, pic, _, _) = doBuild loadedState
+                update vty pic
+                return result
+            ]
+        config = defaultConfig { reportFile = Just "matterhorn-report.html" }
+
+    defaultMainWith config [cases]
+
+    shutdown vty
