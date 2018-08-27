@@ -190,13 +190,13 @@ renderMessage md@MessageData { mdMessage = msg, .. } =
         layout n m (C.List {} :< _)       = multiLnLayout n m
         layout n m (C.Para inlns :< _)
             | F.any breakCheck inlns      = multiLnLayout n m
-        layout n m _                      = hBox $ join [n, return m]
+        layout n m _                      = B.hBox $ join [n, return m]
         multiLnLayout n m =
             if mdIndentBlocks
-               then vBox [ hBox n
-                         , hBox [B.txt "  ", m]
+               then vBox [ B.hBox n
+                         , B.padLeft (B.Pad 2) m
                          ]
-               else hBox $ n <> [m]
+               else B.hBox $ n <> [m]
         breakCheck C.LineBreak = True
         breakCheck C.SoftBreak = True
         breakCheck _ = False
@@ -255,9 +255,6 @@ renderText' hSet txt = renderMarkdown hSet bs
 vBox :: F.Foldable f => f (Widget a) -> Widget a
 vBox = B.vBox . toList
 
-hBox :: F.Foldable f => f (Widget a) -> Widget a
-hBox = B.hBox . toList
-
 --
 
 -- class ToWidget t where
@@ -270,7 +267,7 @@ blockToWidget :: HighlightSet -> Block -> Widget a
 blockToWidget hSet (C.Para is) = toInlineChunk is hSet
 blockToWidget hSet (C.Header n is) =
     B.withDefAttr clientHeaderAttr $
-      hBox [B.padRight (B.Pad 1) $ header n, toInlineChunk is hSet]
+      B.hBox [B.padRight (B.Pad 1) $ header n, toInlineChunk is hSet]
 blockToWidget hSet (C.Blockquote is) =
     addQuoting (vBox $ fmap (blockToWidget hSet) is)
 blockToWidget hSet (C.List _ l bs) = blocksToList l bs hSet
@@ -322,8 +319,8 @@ toInlineChunk is hSet = B.Widget B.Fixed B.Fixed $ do
   ctx <- B.getContext
   let width = ctx^.B.availWidthL
       fs    = toFragments is
-      ws    = fmap gatherWidgets (split width hSet fs)
-  B.render (vBox (fmap hBox ws))
+      ws    = F.toList $ fmap gatherWidgets (split width hSet fs)
+  B.render (vBox (fmap (B.hBox . F.toList) ws))
 
 blocksToList :: ListType -> [Blocks] -> HighlightSet -> Widget a
 blocksToList lt bs hSet = vBox
