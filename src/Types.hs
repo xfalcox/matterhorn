@@ -235,6 +235,7 @@ import           Brick.Widgets.List ( List, list )
 import           Control.Concurrent.Async ( Async )
 import           Control.Concurrent.MVar ( MVar )
 import qualified Control.Concurrent.STM as STM
+import           Control.DeepSeq
 import           Control.Exception ( SomeException )
 import qualified Control.Monad.State as St
 import qualified Control.Monad.Reader as R
@@ -458,7 +459,7 @@ data Name =
     | UserListSearchInput
     | UserListSearchResults
     | ViewMessageArea
-    deriving (Eq, Show, Read, Ord, Generic, A.FromJSON, A.ToJSON)
+    deriving (Eq, Show, Read, Ord, Generic, A.FromJSON, A.ToJSON, NFData)
 
 -- | The sum type of exceptions we expect to encounter on authentication
 -- failure. We encode them explicitly here so that we can print them in
