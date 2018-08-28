@@ -844,8 +844,7 @@ instance A.ToJSON TimeZoneSeries where
     toJSON = A.toJSON . show
 
 -- | This is the giant bundle of fields that represents the current
--- state of our application at any given time. Some of this should be
--- broken out further, but hasn't yet been.
+-- state of our application at any given time.
 data ChatState =
     ChatState { _csResources :: ChatResources
               -- ^ Global application-wide resources that don't change
