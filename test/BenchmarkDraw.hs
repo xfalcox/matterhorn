@@ -3,6 +3,7 @@ module Main where
 import qualified Brick as B
 import Criterion.Main
 import Criterion.Types (Config(..))
+import Control.Exception (finally)
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy as BSL
 import Graphics.Vty hiding (defaultConfig)
@@ -49,8 +50,9 @@ main = do
                 update vty pic
                 return result
             ]
-        config = defaultConfig { reportFile = Just "matterhorn-report.html" }
+        reportPath = "matterhorn-report.html"
+        config = defaultConfig { reportFile = Just reportPath }
 
-    defaultMainWith config [cases]
+    defaultMainWith config [cases] `finally` shutdown vty
 
-    shutdown vty
+    putStrLn $ "Criterion report written to " <> reportPath
