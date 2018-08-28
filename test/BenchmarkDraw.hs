@@ -2,7 +2,7 @@ module Main where
 
 import qualified Brick as B
 import Criterion.Main
-import Criterion.Types (Config(..))
+import Criterion.Types (Config(..), Verbosity(..))
 import Control.Exception (finally)
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy as BSL
@@ -51,7 +51,9 @@ main = do
                 return result
             ]
         reportPath = "matterhorn-report.html"
-        config = defaultConfig { reportFile = Just reportPath }
+        config = defaultConfig { reportFile = Just reportPath
+                               , verbosity = Quiet
+                               }
 
     defaultMainWith config [cases] `finally` shutdown vty
 
