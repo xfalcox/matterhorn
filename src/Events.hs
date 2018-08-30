@@ -148,7 +148,7 @@ dumpState :: MH ()
 dumpState = do
     st <- get
     rs <- mh getRenderState
-    ds <- mh getDisplaySize
+    ds <- mh $ Vty.displayBounds =<< (Vty.outputIface <$> getVtyHandle)
     let sstate = SerializedState { serializedChatState = st
                                  , serializedRenderState = rs
                                  , serializedWindowSize = ds
