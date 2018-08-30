@@ -56,9 +56,6 @@ onEvent :: ChatState -> BrickEvent Name MHEvent -> EventM Name (Next ChatState)
 onEvent st ev = runMHEvent st (onEv >> fetchVisibleIfNeeded)
     where onEv = do case ev of
                       (AppEvent e) -> onAppEvent e
-                      (VtyEvent (Vty.EvKey (Vty.KChar 'l') [Vty.MCtrl])) -> do
-                           vty <- mh getVtyHandle
-                           liftIO $ Vty.refresh vty
                       (VtyEvent e) -> onVtyEvent e
                       _ -> return ()
 
@@ -141,6 +138,10 @@ toplevelKeybindings = mkKeybindings
     [ mkKb DumpStateEvent
         "Dump the application state to disk for debugging"
         dumpState
+    , mkKb VtyRefreshEvent
+        "Redraw the screen"
+        (do vty <- mh getVtyHandle
+            liftIO $ Vty.refresh vty)
     ]
 
 dumpState :: MH ()
