@@ -51,7 +51,9 @@ optDescrs =
     "Print help for command-line flags and exit"
   , Option ['s'] ["state-location"]
     (ReqArg (\ p c -> c { optStateLocation = Just p }) "PATH")
-    "The file path at which state dumps will be written"
+    ("The file path at which state dumps will be written (warning: " <>
+     "this dumps complete states with password redaction but will " <>
+     "still contain private channel contents; use with caution).")
   ]
 
 mhVersion :: String
