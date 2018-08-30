@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Events
   ( ensureKeybindingConsistency
   , onEvent
@@ -135,43 +136,51 @@ formatError (AsyncErrEvent e) =
     T.pack (show e) <>
     "\nPlease report this error at https://github.com/matterhorn-chat/matterhorn/issues"
 
+toplevelKeybindings :: KeyConfig -> [Keybinding]
+toplevelKeybindings = mkKeybindings
+    [ mkKb DumpStateEvent
+        "Dump the application state to disk for debugging"
+        dumpState
+    ]
+
+dumpState :: MH ()
+dumpState = do
+    st <- get
+    rs <- mh getRenderState
+    ds <- mh getDisplaySize
+    let sstate = SerializedState { serializedChatState = st
+                                 , serializedRenderState = rs
+                                 , serializedWindowSize = ds
+                                 }
+    liftIO $ BSL.writeFile "/tmp/matterhorn_state.json" $ A.encode sstate
+
 onVtyEvent :: Vty.Event -> MH ()
-onVtyEvent e = do
+onVtyEvent ev = do
     -- Even if we aren't showing the help UI when a resize occurs, we
     -- need to invalidate its cache entry anyway in case the new size
     -- differs from the cached size.
-    shouldContinue <- case e of
-        (Vty.EvResize _ _) -> do
-            mh invalidateCache
-            return True
-        (Vty.EvKey (Vty.KChar '\\') [Vty.MCtrl]) -> do
-            st <- get
-            rs <- mh getRenderState
-            ds <- mh getDisplaySize
-            let sstate = SerializedState { serializedChatState = st
-                                         , serializedRenderState = rs
-                                         , serializedWindowSize = ds
-                                         }
-            liftIO $ BSL.writeFile "/tmp/matterhorn_state.json" $ A.encode sstate
-            return False
-        _ -> return True
+    case ev of
+        (Vty.EvResize _ _) -> mh invalidateCache
+        _ -> return ()
 
-    when shouldContinue $ do
-        mode <- gets appMode
-        case mode of
-            Main                       -> onEventMain e
-            ShowHelp _                 -> onEventShowHelp e
-            ChannelSelect              -> onEventChannelSelect e
-            UrlSelect                  -> onEventUrlSelect e
-            LeaveChannelConfirm        -> onEventLeaveChannelConfirm e
-            JoinChannel                -> onEventJoinChannel e
-            ChannelScroll              -> onEventChannelScroll e
-            MessageSelect              -> onEventMessageSelect e
-            MessageSelectDeleteConfirm -> onEventMessageSelectDeleteConfirm e
-            DeleteChannelConfirm       -> onEventDeleteChannelConfirm e
-            PostListOverlay _          -> onEventPostListOverlay e
-            UserListOverlay            -> onEventUserListOverlay e
-            ViewMessage                -> onEventViewMessage e
+    let fallback e = do
+            mode <- gets appMode
+            case mode of
+                Main                       -> onEventMain e
+                ShowHelp _                 -> onEventShowHelp e
+                ChannelSelect              -> onEventChannelSelect e
+                UrlSelect                  -> onEventUrlSelect e
+                LeaveChannelConfirm        -> onEventLeaveChannelConfirm e
+                JoinChannel                -> onEventJoinChannel e
+                ChannelScroll              -> onEventChannelScroll e
+                MessageSelect              -> onEventMessageSelect e
+                MessageSelectDeleteConfirm -> onEventMessageSelectDeleteConfirm e
+                DeleteChannelConfirm       -> onEventDeleteChannelConfirm e
+                PostListOverlay _          -> onEventPostListOverlay e
+                UserListOverlay            -> onEventUserListOverlay e
+                ViewMessage                -> onEventViewMessage e
+
+    handleKeyboardEvent toplevelKeybindings fallback ev
 
 handleWSEvent :: WebsocketEvent -> MH ()
 handleWSEvent we = do
@@ -310,8 +319,25 @@ handleWSEvent we = do
 -- would prevent us from being able to type messages containing an @e@
 -- in them!
 ensureKeybindingConsistency :: KeyConfig -> Either String ()
-ensureKeybindingConsistency kc = mapM_ checkGroup allBindings
+ensureKeybindingConsistency kc = do
+    mapM_ checkGroup allBindings
+    checkToplevelBindings
   where
+    checkToplevelBindings = do
+        forM_ (toplevelKeybindings kc) $ \kb -> do
+            -- Is the event for this binding also bound to anything in
+            -- other modes? If so, is it bound to a different key?
+            case kbBindingInfo kb of
+                Nothing -> return ()
+                Just ev -> do
+                    let matches = filter ((== (eventToBinding $ kbEvent kb)) . fst) $ concat allBindings
+                        conflicts = filter ((/= ev). snd . snd) matches
+                    when (not $ null conflicts) $ do
+                        Left $ "The binding " <> (T.unpack $ ppBinding $ eventToBinding $ kbEvent kb) <>
+                               " is bound to multiple events: " <>
+                               (intercalate ", " $ ppEvent <$>
+                                   (ev : (snd <$> snd <$> conflicts)))
+
     -- This is a list of lists, grouped by keybinding, of all the
     -- keybinding/event associations that are going to be used with
     -- the provided key configuration.
@@ -392,12 +418,13 @@ ensureKeybindingConsistency kc = mapM_ checkGroup allBindings
     -- We generate the which-events-are-valid-in-which-modes map from
     -- our actual keybinding set, so this should never get out of date.
     modeMap ev =
-      let bindingHasEvent (KB _ _ _ (Just ev')) = ev == ev'
-          bindingHasEvent _ = False
-      in [ mode
-         | (mode, bindings) <- modeMaps
-         , any bindingHasEvent bindings
-         ]
+      [ mode
+      | (mode, bindings) <- modeMaps
+      , any (bindingHasEvent ev) bindings
+      ]
+
+    bindingHasEvent ev (KB _ _ _ (Just ev')) = ev == ev'
+    bindingHasEvent _ _ = False
 
     modeMaps = [ ("main" :: String, mainKeybindings kc)
                , ("help screen", helpKeybindings kc)
