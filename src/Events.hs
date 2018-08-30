@@ -1,5 +1,9 @@
 {-# LANGUAGE MultiWayIf #-}
-module Events where
+module Events
+  ( ensureKeybindingConsistency
+  , onEvent
+  )
+where
 
 import           Prelude ()
 import           Prelude.MH
