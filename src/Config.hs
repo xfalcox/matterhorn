@@ -78,6 +78,7 @@ fromIni = do
     configThemeCustomizationFile <- fieldMbOf "themeCustomizationFile" stringField
     configAspellDictionary <- fieldMbOf "aspellDictionary" stringField
     configURLOpenCommand <- fieldMbOf "urlOpenCommand" stringField
+    configStateLocation <- fieldMbOf "stateDumpLocation" stringField
     configURLOpenCommandInteractive <- fieldFlagDef "urlOpenCommandIsInteractive" False
     configSmartBacktick  <- fieldFlagDef "smartbacktick"
       (configSmartBacktick defaultConfig)
@@ -175,6 +176,7 @@ defaultConfig =
            , configShowTypingIndicator       = False
            , configHyperlinkingMode          = True
            , configSyntaxDirs                = []
+           , configStateLocation             = Nothing
            }
 
 findConfig :: Maybe FilePath -> IO (Either String Config)

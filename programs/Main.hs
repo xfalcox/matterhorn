@@ -2,6 +2,7 @@ module Main where
 
 import Prelude ()
 import Prelude.MH
+import qualified Data.Text as T
 
 import System.Exit ( exitFailure )
 
@@ -27,5 +28,8 @@ main = do
             putStrLn $ "Configuration error: " <> err
             exitFailure
 
-    finalSt <- runMatterhorn opts config
+    let newConfig = config { configStateLocation = T.pack <$> optStateLocation opts
+                           }
+
+    finalSt <- runMatterhorn opts newConfig
     closeMatterhorn finalSt

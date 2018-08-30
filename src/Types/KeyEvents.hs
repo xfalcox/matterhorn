@@ -90,6 +90,8 @@ data KeyEvent
   | DeleteMessageEvent
   | EditMessageEvent
   | ReplyMessageEvent
+
+  | DumpStateEvent
     deriving (Eq, Show, Ord, Enum, Generic, A.FromJSON, A.ToJSON, A.ToJSONKey, A.FromJSONKey)
 
 allEvents :: [KeyEvent]
@@ -141,6 +143,8 @@ allEvents =
   , DeleteMessageEvent
   , EditMessageEvent
   , ReplyMessageEvent
+
+  , DumpStateEvent
   ]
 
 eventToBinding :: Vty.Event -> Binding
@@ -334,3 +338,5 @@ keyEventName ev = case ev of
   DeleteMessageEvent -> "delete-message"
   EditMessageEvent   -> "edit-message"
   ReplyMessageEvent  -> "reply-message"
+
+  DumpStateEvent  -> "dump-state"

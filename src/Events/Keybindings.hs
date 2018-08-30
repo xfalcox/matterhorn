@@ -142,3 +142,5 @@ defaultBindings ev =
         EditMessageEvent    -> [ key 'e' ]
         ReplyMessageEvent   -> [ key 'r' ]
         OpenMessageURLEvent -> [ key 'o' ]
+
+        DumpStateEvent      -> [ ctrl (key '\\') ]

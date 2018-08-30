@@ -24,6 +24,7 @@ data Options = Options
   { optConfLocation :: Maybe FilePath
   , optLogLocation  :: Maybe FilePath
   , optBehaviour    :: Behaviour
+  , optStateLocation :: Maybe FilePath
   } deriving (Eq, Show)
 
 defaultOptions :: Options
@@ -31,6 +32,7 @@ defaultOptions = Options
   { optConfLocation = Nothing
   , optLogLocation  = Nothing
   , optBehaviour    = Normal
+  , optStateLocation = Nothing
   }
 
 optDescrs :: [OptDescr (Options -> Options)]
@@ -47,6 +49,9 @@ optDescrs =
   , Option ['h'] ["help"]
     (NoArg (\ c -> c { optBehaviour = ShowHelp }))
     "Print help for command-line flags and exit"
+  , Option ['s'] ["state-location"]
+    (ReqArg (\ p c -> c { optStateLocation = Just p }) "PATH")
+    "The file path at which state dumps will be written"
   ]
 
 mhVersion :: String

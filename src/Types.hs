@@ -365,6 +365,10 @@ data Config =
            -- ^ Whether to enable terminal hyperlinking mode.
            , configSyntaxDirs :: [FilePath]
            -- ^ The search path for syntax description XML files.
+           , configStateLocation :: Maybe T.Text
+           -- ^ Where to dump program states for debugging and
+           -- benchmarking. If Nothing, the state dumping feature is
+           -- disabled.
            } deriving (Eq, Show, Generic, A.FromJSON, A.ToJSON)
 
 -- | The state of the UI diagnostic indicator for the async worker
