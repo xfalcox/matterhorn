@@ -10,6 +10,7 @@ import           Prelude ()
 import           Prelude.MH
 
 import           Brick
+import qualified Control.Exception as E
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Map as M
@@ -147,13 +148,21 @@ toplevelKeybindings = mkKeybindings
 dumpState :: MH ()
 dumpState = do
     st <- get
-    rs <- mh getRenderState
-    ds <- mh $ Vty.displayBounds =<< (Vty.outputIface <$> getVtyHandle)
-    let sstate = SerializedState { serializedChatState = st
-                                 , serializedRenderState = rs
-                                 , serializedWindowSize = ds
-                                 }
-    liftIO $ BSL.writeFile "/tmp/matterhorn_state.json" $ A.encode sstate
+    case configStateLocation $ st^.csResources.crConfiguration of
+        Nothing -> return ()
+        Just path -> do
+            rs <- mh getRenderState
+            ds <- mh $ Vty.displayBounds =<< (Vty.outputIface <$> getVtyHandle)
+            let sstate = SerializedState { serializedChatState = st
+                                         , serializedRenderState = rs
+                                         , serializedWindowSize = ds
+                                         }
+            result <- liftIO $ E.try $ BSL.writeFile (T.unpack path) $ A.encode sstate
+            case result of
+                Left (e::E.SomeException) ->
+                    mhError $ GenericError $ T.pack $ "State dump failed: " <> show e
+                Right _ ->
+                    postInfoMessage $ "State dumped to " <> path
 
 onVtyEvent :: Vty.Event -> MH ()
 onVtyEvent ev = do
