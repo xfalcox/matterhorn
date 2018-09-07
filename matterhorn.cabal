@@ -126,9 +126,9 @@ library
                      , config-ini           >= 0.2.2.0 && < 0.3
                      , process              >= 1.4    && < 1.7
                      , microlens-platform   >= 0.3    && < 0.4
-                     , brick                >= 0.40   && < 0.41
+                     , brick                >= 0.41   && < 0.42
                      , brick-skylighting    >= 0.2    && < 0.3
-                     , vty                  >= 5.23.1 && < 5.24
+                     , vty                  >= 5.24   && < 5.25
                      , word-wrap            >= 0.4.0  && < 0.5
                      , transformers         >= 0.4    && < 0.6
                      , text-zipper          >= 0.10   && < 0.11
