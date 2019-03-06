@@ -190,18 +190,18 @@ handleWSEvent we = do
             | Just p <- wepPost (weData we) -> do
                 editMessage p
                 ch <- use csCurrentChannelHandle
-                when ((ServerChannel $ postChannelId p) == ch) (updateViewed False)
-                when ((ServerChannel $ postChannelId p) /= ch) $
-                    showChannelInSidebar (p^.postChannelIdL) False
+                if ((ServerChannel $ postChannelId p) == ch)
+                   then updateViewed False
+                   else showChannelInSidebar (p^.postChannelIdL) False
             | otherwise -> return ()
 
         WMPostDeleted
             | Just p <- wepPost (weData we) -> do
                 deleteMessage p
                 ch <- use csCurrentChannelHandle
-                when ((ServerChannel $ postChannelId p) == ch) (updateViewed False)
-                when ((ServerChannel $ postChannelId p) /= ch) $
-                    showChannelInSidebar (p^.postChannelIdL) False
+                if ((ServerChannel $ postChannelId p) == ch)
+                   then updateViewed False
+                   else showChannelInSidebar (p^.postChannelIdL) False
             | otherwise -> return ()
 
         WMStatusChange
