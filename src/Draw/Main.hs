@@ -22,7 +22,7 @@ import           Data.Time.Clock ( UTCTime(..) )
 import qualified Graphics.Vty as Vty
 import           Lens.Micro.Platform ( (.~), (^?!), to, view, folding )
 
-import           Network.Mattermost.Types ( ChannelId, Type(Direct, Private, Group)
+import           Network.Mattermost.Types ( Type(Direct, Private, Group)
                                           , ServerTime(..), UserId
                                           )
 
@@ -331,8 +331,8 @@ renderCurrentChannelDisplay st hs = header <=> messages
             -- messages are *not* displayed, but this preserves the
             -- stability of the scrolling, which provides a better
             -- user experience.
-            viewport (ChannelMessages cId) Vertical $
-            cached (ChannelMessages cId) $
+            viewport (ChannelMessages ch) Vertical $
+            cached (ChannelMessages ch) $
             vBox $ (withDefAttr loadMoreAttr $ hCenter $
                     str "<< Press C-b to load more messages >>") :
                    (toList $ renderSingleMessage st hs editCutoff <$> channelMessages)
@@ -341,7 +341,7 @@ renderCurrentChannelDisplay st hs = header <=> messages
         MessageSelectDeleteConfirm ->
             renderMessagesWithSelect (st^.csMessageSelect) channelMessages
         _ ->
-            cached (ChannelMessages cId) $
+            cached (ChannelMessages ch) $
             renderLastMessages $ reverseMessages channelMessages
 
     renderMessagesWithSelect (MessageSelectState selMsgId) msgs =
@@ -364,10 +364,10 @@ renderCurrentChannelDisplay st hs = header <=> messages
              Just m ->
                unsafeRenderMessageSelection (m, (before, after)) (renderSingleMessage st hs Nothing)
 
-    cutoff = getNewMessageCutoff cId st
-    editCutoff = getEditedMessageCutoff cId st
+    cutoff = getNewMessageCutoff ch st
+    editCutoff = getEditedMessageCutoff ch st
     channelMessages =
-        insertTransitions (getMessageListing cId st)
+        insertTransitions (getMessageListing ch st)
                           cutoff
                           (getDateFormat st)
                           (st ^. timeZone)
@@ -396,13 +396,12 @@ renderCurrentChannelDisplay st hs = header <=> messages
                                   renderSingleMessage st hs editCutoff msg
                       return $ r^.imageL
 
-    cId = st^.csCurrentChannelId
+    ch = st^.csCurrentChannelHandle
     chan = st^.csCurrentChannel
 
-
-getMessageListing :: ChannelId -> ChatState -> Messages
-getMessageListing cId st =
-    st ^?! csChannels.folding (findChannelById cId) . ccContents . cdMessages . to (filterMessages isShown)
+getMessageListing :: ChannelHandle -> ChatState -> Messages
+getMessageListing ch st =
+    st ^?! csChannels.folding (findChannelByHandle ch) . ccContents . cdMessages . to (filterMessages isShown)
     where isShown m
             | st^.csResources.crUserPreferences.userPrefShowJoinLeave = True
             | otherwise = not $ isJoinLeave m

@@ -27,8 +27,8 @@ channelScrollKeybindings = mkKeybindings
   , mkKb PageDownEvent "Scroll down"
     channelPageDown
   , mkKb CancelEvent "Cancel scrolling and return to channel view" $ do
-      cId <- use csCurrentChannelId
-      mh $ invalidateCacheEntry (ChannelMessages cId)
+      ch <- use csCurrentChannelHandle
+      mh $ invalidateCacheEntry (ChannelMessages ch)
       setMode Main
   , mkKb ScrollTopEvent "Scroll to top"
     channelScrollToTop
@@ -40,9 +40,9 @@ onEventChannelScroll :: Vty.Event -> MH ()
 onEventChannelScroll =
   handleKeyboardEvent channelScrollKeybindings $ \ e -> case e of
     (Vty.EvResize _ _) -> do
-      cId <- use csCurrentChannelId
+      ch <- use csCurrentChannelHandle
       mh $ do
         invalidateCache
-        let vp = ChannelMessages cId
+        let vp = ChannelMessages ch
         vScrollToEnd $ viewportScroll vp
     _ -> return ()

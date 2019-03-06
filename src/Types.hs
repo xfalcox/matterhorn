@@ -25,7 +25,7 @@ module Types
   , PendingChannelChange(..)
   , clearChannelUnreadStatus
   , ChannelListEntry(..)
-  , channelListEntryChannelId
+  , channelListEntryChannelHandle
   , channelListEntryUserId
   , userIdsFromZipper
   , entryIsDMEntry
@@ -59,7 +59,7 @@ module Types
   , csResources
   , csFocus
   , csCurrentChannel
-  , csCurrentChannelId
+  , csCurrentChannelHandle
   , csUrlList
   , csShowMessagePreview
   , csShowChannelList
@@ -207,7 +207,7 @@ module Types
   , usernameForUserId
   , userByUsername
   , userByNickname
-  , channelIdByChannelName
+  , channelHandleByChannelName
   , channelIdByUsername
   , channelByName
   , userById
@@ -421,9 +421,9 @@ data UserPreferences =
                     , _userPrefTeammateNameDisplayMode :: Maybe TeammateNameDisplayMode
                     }
 
-hasUnread :: ChatState -> ChannelId -> Bool
+hasUnread :: ChatState -> ChannelHandle -> Bool
 hasUnread st cId = fromMaybe False $
-    hasUnread' <$> findChannelById cId (_csChannels st)
+    hasUnread' <$> findChannelByHandle cId (_csChannels st)
 
 hasUnread' :: ClientChannel -> Bool
 hasUnread' chan = fromMaybe False $ do
@@ -447,7 +447,7 @@ mkChannelZipperList now config cconfig prefs cs us =
 getNonDMChannelIdsInOrder :: ClientChannels -> [ChannelListEntry]
 getNonDMChannelIdsInOrder cs =
     let matches (_, info) = info^.ccInfo.cdType `notElem` [Direct, Group]
-    in fmap (CLChannel . fst) $
+    in fmap (\(ServerChannel cId, _) -> CLChannel cId) $
        sortBy (comparing ((^.ccInfo.cdName) . snd)) $
        filteredChannels matches cs
 
@@ -496,7 +496,7 @@ getGroupDMChannels :: UTCTime
 getGroupDMChannels now config prefs cs =
     let matches (_, info) = info^.ccInfo.cdType == Group &&
                             groupChannelShouldAppear now config prefs info
-    in fmap (\(cId, ch) -> (hasUnread' ch, ch^.ccInfo.cdName, CLGroupDM cId)) $
+    in fmap (\((ServerChannel cId), chan) -> (hasUnread' chan, chan^.ccInfo.cdName, CLGroupDM cId)) $
        filteredChannels matches cs
 
 getDMChannels :: UTCTime
@@ -510,7 +510,7 @@ getDMChannels now config cconfig prefs us cs =
     let mapping = allDmChannelMappings cs
         mappingWithUserInfo = catMaybes $ getInfo <$> mapping
         getInfo (uId, cId) = do
-            c <- findChannelById cId cs
+            c <- findChannelByHandle (ServerChannel cId) cs
             u <- findUserById uId us
             case u^.uiDeleted of
                 True -> Nothing
@@ -569,7 +569,7 @@ groupChannelShowPreference ps cId = HM.lookup cId (_userPrefGroupChannelPrefs ps
 -- | This 'Name' type is the type used in 'brick' to identify various
 -- parts of the interface.
 data Name =
-    ChannelMessages ChannelId
+    ChannelMessages ChannelHandle
     | MessageInput
     | ChannelList
     | HelpViewport
@@ -993,7 +993,7 @@ data ChatState =
               , _csChannelSelectState :: ChannelSelectState
               -- ^ The state of the user's input and selection for
               -- channel selection mode.
-              , _csRecentChannel :: Maybe ChannelId
+              , _csRecentChannel :: Maybe ChannelHandle
               -- ^ The most recently-selected channel, if any.
               , _csUrlList :: List Name LinkChoice
               -- ^ The URL list used to show URLs drawn from messages in
@@ -1344,13 +1344,13 @@ resetSpellCheckTimer s =
         Just (_, reset) -> reset
 
 -- ** Utility Lenses
-csCurrentChannelId :: SimpleGetter ChatState ChannelId
-csCurrentChannelId = csFocus.to unsafeFocus.to channelListEntryChannelId
+csCurrentChannelHandle :: SimpleGetter ChatState ChannelHandle
+csCurrentChannelHandle = csFocus.to unsafeFocus.to channelListEntryChannelHandle
 
-channelListEntryChannelId :: ChannelListEntry -> ChannelId
-channelListEntryChannelId (CLChannel cId) = cId
-channelListEntryChannelId (CLUserDM cId _) = cId
-channelListEntryChannelId (CLGroupDM cId) = cId
+channelListEntryChannelHandle :: ChannelListEntry -> ChannelHandle
+channelListEntryChannelHandle (CLChannel cId) = ServerChannel cId
+channelListEntryChannelHandle (CLUserDM cId _) = ServerChannel cId
+channelListEntryChannelHandle (CLGroupDM cId) = ServerChannel cId
 
 channelListEntryUserId :: ChannelListEntry -> Maybe UserId
 channelListEntryUserId (CLUserDM _ uId) = Just uId
@@ -1367,19 +1367,19 @@ entryIsDMEntry (CLChannel {}) = False
 
 csCurrentChannel :: Lens' ChatState ClientChannel
 csCurrentChannel =
-    lens (\ st -> findChannelById (st^.csCurrentChannelId) (st^.csChannels) ^?! _Just)
-         (\ st n -> st & csChannels %~ addChannel (st^.csCurrentChannelId) n)
+    lens (\ st -> findChannelByHandle (st^.csCurrentChannelHandle) (st^.csChannels) ^?! _Just)
+         (\ st n -> st & csChannels %~ addChannel (st^.csCurrentChannelHandle) n)
 
-csChannel :: ChannelId -> Traversal' ChatState ClientChannel
-csChannel cId =
-    csChannels . channelByIdL cId
+csChannel :: ChannelHandle -> Traversal' ChatState ClientChannel
+csChannel ch =
+    csChannels . channelByHandleL ch
 
 withChannel :: ChannelId -> (ClientChannel -> MH ()) -> MH ()
 withChannel cId = withChannelOrDefault cId ()
 
 withChannelOrDefault :: ChannelId -> a -> (ClientChannel -> MH a) -> MH a
 withChannelOrDefault cId deflt mote = do
-    chan <- preuse (csChannel(cId))
+    chan <- preuse (csChannel(ServerChannel cId))
     case chan of
         Nothing -> return deflt
         Just c  -> mote c
@@ -1429,8 +1429,8 @@ userIdForUsername :: Text -> ChatState -> Maybe UserId
 userIdForUsername name st =
     fst <$> (findUserByUsername name $ st^.csUsers)
 
-channelIdByChannelName :: Text -> ChatState -> Maybe ChannelId
-channelIdByChannelName name st =
+channelHandleByChannelName :: Text -> ChatState -> Maybe ChannelHandle
+channelHandleByChannelName name st =
     let matches (_, cc) = cc^.ccInfo.cdName == (trimChannelSigil name)
     in listToMaybe $ fst <$> filteredChannels matches (st^.csChannels)
 
@@ -1445,8 +1445,8 @@ useNickname st =
 
 channelByName :: Text -> ChatState -> Maybe ClientChannel
 channelByName n st = do
-    cId <- channelIdByChannelName n st
-    findChannelById cId (st^.csChannels)
+    ch <- channelHandleByChannelName n st
+    findChannelByHandle ch (st^.csChannels)
 
 trimChannelSigil :: Text -> Text
 trimChannelSigil n
@@ -1563,21 +1563,21 @@ getHighlightSet st =
                  , hSyntaxMap = st^.csResources.crSyntaxMap
                  }
 
-getNewMessageCutoff :: ChannelId -> ChatState -> Maybe NewMessageIndicator
-getNewMessageCutoff cId st = do
-    cc <- st^?csChannel(cId)
+getNewMessageCutoff :: ChannelHandle -> ChatState -> Maybe NewMessageIndicator
+getNewMessageCutoff ch st = do
+    cc <- st^?csChannel(ch)
     return $ cc^.ccInfo.cdNewMessageIndicator
 
-getEditedMessageCutoff :: ChannelId -> ChatState -> Maybe ServerTime
-getEditedMessageCutoff cId st = do
-    cc <- st^?csChannel(cId)
+getEditedMessageCutoff :: ChannelHandle -> ChatState -> Maybe ServerTime
+getEditedMessageCutoff ch st = do
+    cc <- st^?csChannel(ch)
     cc^.ccInfo.cdEditedMessageThreshold
 
-clearChannelUnreadStatus :: ChannelId -> MH ()
-clearChannelUnreadStatus cId = do
-    mh $ invalidateCacheEntry (ChannelMessages cId)
-    csChannel(cId) %= (clearNewMessageIndicator .
-                       clearEditedThreshold)
+clearChannelUnreadStatus :: ChannelHandle -> MH ()
+clearChannelUnreadStatus ch = do
+    mh $ invalidateCacheEntry (ChannelMessages ch)
+    csChannel(ch) %= (clearNewMessageIndicator .
+                      clearEditedThreshold)
 
 data OpenInBrowser =
     OpenLinkChoice LinkChoice

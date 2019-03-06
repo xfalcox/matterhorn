@@ -55,7 +55,7 @@ drawPostsBox contents st =
 
         knownChannel msg =
             case msg^.mChannelId of
-                Just cId | Nothing <- st^?csChannels.channelByIdL(cId) -> False
+                Just cId | Nothing <- st^?csChannels.channelByHandleL(ServerChannel cId) -> False
                 _ -> True
 
         -- The overall contents, with a sensible default even if there
@@ -80,7 +80,7 @@ drawPostsBox contents st =
             -- We should factor out some of the channel name logic at
             -- some point, but we can do that later
             Just post
-              | Just chan <- st^?csChannels.channelByIdL(post^.postChannelIdL) ->
+              | Just chan <- st^?csChannels.channelByHandleL(ServerChannel $ post^.postChannelIdL) ->
                  case chan^.ccInfo.cdType of
                   Direct
                     | Just u <- flip userById st =<< chan^.ccInfo.cdDMUserId ->

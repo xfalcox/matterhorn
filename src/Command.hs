@@ -136,7 +136,7 @@ commandList =
         withFetchedUserMaybe (UserFetchByUsername name) $ \foundUser -> do
             case foundUser of
                 Just user -> createOrFocusDMChannel user $ Just $ \cId ->
-                    handleInputSubmission cId msg
+                    handleInputSubmission (ServerChannel cId) msg
                 Nothing -> mhError $ NoSuchUser name
 
   , Cmd "log-start" "Begin logging to the specified path"
@@ -219,7 +219,7 @@ commandList =
 
 execMMCommand :: Text -> Text -> MH ()
 execMMCommand name rest = do
-  cId      <- use csCurrentChannelId
+  ServerChannel cId <- use csCurrentChannelHandle
   session  <- getSession
   em       <- use (csEditState.cedEditMode)
   tId      <- gets myTeamId

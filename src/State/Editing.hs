@@ -41,7 +41,7 @@ import qualified System.IO.Temp as Sys
 import qualified System.Process as Sys
 import           Text.Aspell ( AspellResponse(..), mistakeWord, askAspell )
 
-import           Network.Mattermost.Types ( Post(..), ChannelId )
+import           Network.Mattermost.Types ( Post(..) )
 
 import           Config
 import {-# SOURCE #-} Command ( dispatchCommand )
@@ -201,8 +201,8 @@ getEditorContent = do
 -- *source* of the text, so it also takes care of clearing the editor,
 -- resetting the edit mode, updating the input history for the specified
 -- channel, etc.
-handleInputSubmission :: ChannelId -> Text -> MH ()
-handleInputSubmission cId content = do
+handleInputSubmission :: ChannelHandle -> Text -> MH ()
+handleInputSubmission (ServerChannel cId) content = do
     -- We clean up before dispatching the command or sending the message
     -- since otherwise the command could change the state and then doing
     -- cleanup afterwards could clean up the wrong things.
@@ -323,8 +323,10 @@ sendUserTypingAction = do
                     _               -> Nothing
         liftIO $ do
           now <- getCurrentTime
-          let action = UserTyping now (st^.csCurrentChannelId) pId
-          STM.atomically $ STM.writeTChan (st^.csResources.crWebsocketActionChan) action
+          case st^.csCurrentChannelHandle of
+              ServerChannel cId -> do
+                  let action = UserTyping now cId pId
+                  STM.atomically $ STM.writeTChan (st^.csResources.crWebsocketActionChan) action
       Disconnected -> return ()
 
 -- Kick off an async request to the spell checker for the current editor

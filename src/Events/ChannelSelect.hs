@@ -28,7 +28,7 @@ channelSelectKeybindings = mkKeybindings
                  Nothing -> return ()
                  Just match -> do
                      setMode Main
-                     setFocus $ channelListEntryChannelId $ matchEntry match
+                     setFocus $ channelListEntryChannelHandle $ matchEntry match
 
     , mkKb CancelEvent "Cancel channel selection" $ setMode Main
     , mkKb NextChannelEvent "Select next match" channelSelectNext

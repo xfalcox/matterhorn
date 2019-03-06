@@ -40,7 +40,7 @@ import           Types
 -- current channel.
 enterChannelMembersUserList :: MH ()
 enterChannelMembersUserList = do
-  cId <- use csCurrentChannelId
+  ServerChannel cId <- use csCurrentChannelHandle
   myId <- gets myUserId
   myTId <- gets myTeamId
   enterUserListMode (ChannelMembers cId myTId)
@@ -54,7 +54,7 @@ enterChannelMembersUserList = do
 -- channel.
 enterChannelInviteUserList :: MH ()
 enterChannelInviteUserList = do
-  cId <- use csCurrentChannelId
+  ServerChannel cId <- use csCurrentChannelHandle
   myId <- gets myUserId
   myTId <- gets myTeamId
   enterUserListMode (ChannelNonMembers cId myTId)

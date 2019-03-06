@@ -40,7 +40,8 @@ updateMessageFlag pId f = do
     Just msg
       | Just cId <- msg^.mChannelId -> do
       let isTargetMessage m = m^.mMessageId == Just (MessagePostId pId)
-      csChannel(cId).ccContents.cdMessages.traversed.filtered isTargetMessage.mFlagged .= f
+          ch = ServerChannel cId
+      csChannel(ch).ccContents.cdMessages.traversed.filtered isTargetMessage.mFlagged .= f
       csPostMap.ix(pId).mFlagged .= f
       -- We also want to update the post overlay if this happens while
       -- we're we're observing it

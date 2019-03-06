@@ -181,26 +181,26 @@ handleWSEvent we = do
                       wepTeamId (weData we) == Nothing) $ do
                     let wasMentioned = maybe False (Set.member myId) $ wepMentions (weData we)
                     addNewPostedMessage $ RecentPost p wasMentioned
-                    cId <- use csCurrentChannelId
-                    when (postChannelId p /= cId) $
+                    ch <- use csCurrentChannelHandle
+                    when ((ServerChannel $ postChannelId p) /= ch) $
                         showChannelInSidebar (p^.postChannelIdL) False
             | otherwise -> return ()
 
         WMPostEdited
             | Just p <- wepPost (weData we) -> do
                 editMessage p
-                cId <- use csCurrentChannelId
-                when (postChannelId p == cId) (updateViewed False)
-                when (postChannelId p /= cId) $
+                ch <- use csCurrentChannelHandle
+                when ((ServerChannel $ postChannelId p) == ch) (updateViewed False)
+                when ((ServerChannel $ postChannelId p) /= ch) $
                     showChannelInSidebar (p^.postChannelIdL) False
             | otherwise -> return ()
 
         WMPostDeleted
             | Just p <- wepPost (weData we) -> do
                 deleteMessage p
-                cId <- use csCurrentChannelId
-                when (postChannelId p == cId) (updateViewed False)
-                when (postChannelId p /= cId) $
+                ch <- use csCurrentChannelHandle
+                when ((ServerChannel $ postChannelId p) == ch) (updateViewed False)
+                when ((ServerChannel $ postChannelId p) /= ch) $
                     showChannelInSidebar (p^.postChannelIdL) False
             | otherwise -> return ()
 
@@ -225,7 +225,7 @@ handleWSEvent we = do
         WMUserRemoved
             | Just cId <- wepChannelId (weData we) ->
                 when (webUserId (weBroadcast we) == Just myId) $
-                    removeChannelFromState cId
+                    removeChannelFromState (ServerChannel cId)
             | otherwise -> return ()
 
         WMTyping
@@ -236,7 +236,7 @@ handleWSEvent we = do
         WMChannelDeleted
             | Just cId <- wepChannelId (weData we) ->
                 when (webTeamId (weBroadcast we) == Just myTId) $
-                    removeChannelFromState cId
+                    removeChannelFromState (ServerChannel cId)
             | otherwise -> return ()
 
         WMDirectAdded
@@ -281,7 +281,7 @@ handleWSEvent we = do
 
         WMChannelUpdated
             | Just cId <- webChannelId $ weBroadcast we -> do
-                mChan <- preuse (csChannel(cId))
+                mChan <- preuse (csChannel(ServerChannel cId))
                 when (isJust mChan) $ do
                     refreshChannelById cId
                     updateSidebar

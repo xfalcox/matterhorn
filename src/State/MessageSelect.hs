@@ -92,7 +92,7 @@ fillSelectedGap = do
   selected <- use (to getSelectedMessage)
   case selected of
     Just msg
-      | isGap msg -> do cId <- use csCurrentChannelId
+      | isGap msg -> do ServerChannel cId <- use csCurrentChannelHandle
                         asyncFetchMessagesForGap cId msg
     _        -> return ()
 
@@ -211,7 +211,7 @@ deleteSelectedMessage :: MH ()
 deleteSelectedMessage = do
     selectedMessage <- use (to getSelectedMessage)
     st <- use id
-    cId <- use csCurrentChannelId
+    ServerChannel cId <- use csCurrentChannelHandle
     case selectedMessage of
         Just msg | isMine st msg && isDeletable msg ->
             case msg^.mOriginalPost of

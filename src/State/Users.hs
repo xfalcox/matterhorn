@@ -45,7 +45,7 @@ handleTypingUser uId cId = do
     when (configShowTypingIndicator config) $ do
         withFetchedUser (UserFetchById uId) $ const $ do
             ts <- liftIO getCurrentTime
-            csChannels %= modifyChannelById cId (addChannelTypingUser uId ts)
+            csChannels %= modifyChannelByHandle (ServerChannel cId) (addChannelTypingUser uId ts)
 
 -- | A user fetching strategy.
 data UserFetch =

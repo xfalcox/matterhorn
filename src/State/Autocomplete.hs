@@ -120,12 +120,14 @@ doUserAutoCompletion searchString = do
     session <- getSession
     myTid <- gets myTeamId
     myUid <- gets myUserId
-    cId <- use csCurrentChannelId
+    ch <- use csCurrentChannelHandle
     let label = "Users"
+        mCid = case ch of
+            ServerChannel cId -> Just cId
 
     withCachedAutocompleteResults label searchString $
         doAsyncWith Preempt $ do
-            ac <- MM.mmAutocompleteUsers (Just myTid) (Just cId) searchString session
+            ac <- MM.mmAutocompleteUsers (Just myTid) mCid searchString session
 
             let active = Seq.filter (\u -> userId u /= myUid && (not $ userDeleted u))
                 alts = F.toList $
@@ -148,7 +150,7 @@ doChannelAutoCompletion searchString = do
             let alts = F.toList $ (ChannelCompletion True <$> inChannels) <>
                                   (ChannelCompletion False <$> notInChannels)
                 (inChannels, notInChannels) = Seq.partition isMember results
-                isMember c = isJust $ findChannelById (channelId c) cs
+                isMember c = isJust $ findChannelByHandle (ServerChannel $ channelId c) cs
             return $ Just $ setCompletionAlternatives searchString alts label
 
 setCompletionAlternatives :: Text -> [AutocompleteAlternative] -> Text -> MH ()

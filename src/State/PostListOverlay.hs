@@ -144,7 +144,7 @@ postListJumpToCurrent = do
         Just msg ->
           case msg ^. mChannelId of
             Just cId -> do
-              setFocus cId
+              setFocus $ ServerChannel cId
               setMode MessageSelect
               csMessageSelect .= MessageSelectState (msg^.mMessageId)
             Nothing ->
