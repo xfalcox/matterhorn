@@ -34,6 +34,7 @@ import           System.IO ( Handle, IOMode(AppendMode), hPutStr, hPutStrLn
                            , hFlush, openFile, hClose )
 
 import           Types
+import           State.Common ( addClientMessageTo )
 
 
 -- | The state of the logging thread.
@@ -222,6 +223,11 @@ handleLogCommand (LogAMessage lm) = do
         Just (_, handle) -> liftIO $ do
             hPutLogMessage handle lm
             hFlush handle
+
+    eventChan <- gets logThreadEventChan
+    clientMsg <- liftIO $ newClientMessage Informative (logMessageText lm)
+    liftIO $ writeBChan eventChan $ RespEvent $ do
+        addClientMessageTo clientMsg LogChannel
 
     return True
 

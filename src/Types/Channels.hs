@@ -22,12 +22,13 @@ module Types.Channels
   -- * Lenses created for accessing ChannelInfo fields
   , cdViewed, cdNewMessageIndicator, cdEditedMessageThreshold, cdUpdated
   , cdName, cdHeader, cdPurpose, cdType
-  , cdMentionCount, cdTypingUsers, cdDMUserId, cdChannelId
+  , cdMentionCount, cdTypingUsers, cdDMUserId, cdChannelHandle
   , cdSidebarShowOverride
   -- * Lenses created for accessing ChannelContents fields
   , cdMessages, cdFetchPending
   -- * Creating ClientChannel objects
   , makeClientChannel
+  , makeLogChannel
   -- * Managing ClientChannel collections
   , noChannels, addChannel, removeChannel, findChannelByHandle, modifyChannelByHandle
   , channelByHandleL, maybeChannelByHandleL
@@ -61,6 +62,7 @@ import           Prelude.MH
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Set as S
 import qualified Data.Text as T
+import           Data.Time.Clock ( getCurrentTime )
 import           Data.Hashable ( Hashable )
 import           GHC.Generics ( Generic )
 import           Lens.Micro.Platform ( (%~), (.~), Traversal', Lens'
@@ -76,7 +78,7 @@ import           Network.Mattermost.Types ( Channel(..), UserId, ChannelId
                                           , ChannelNotifyProps
                                           , NotifyOption(..)
                                           , WithDefault(..)
-                                          , ServerTime
+                                          , ServerTime(..)
                                           , emptyChannelNotifyProps
                                           )
 
@@ -140,7 +142,7 @@ data NewMessageIndicator =
 initialChannelInfo :: UserId -> Channel -> ChannelInfo
 initialChannelInfo myId chan =
     let updated  = chan ^. channelLastPostAtL
-    in ChannelInfo { _cdChannelId              = chan^.channelIdL
+    in ChannelInfo { _cdChannelHandle          = ServerChannel $ chan^.channelIdL
                    , _cdViewed                 = Nothing
                    , _cdNewMessageIndicator    = Hide
                    , _cdEditedMessageThreshold = Nothing
@@ -195,14 +197,21 @@ emptyChannelContents = do
                            , _cdFetchPending = False
                            }
 
+-- | A handle to a client channel.
+data ChannelHandle =
+    ServerChannel ChannelId
+    -- ^ The client channel corresponds to the specified server-side
+    -- channel.
+    | LogChannel
+    deriving (Eq, Show, Ord, Generic, Hashable)
 
 ------------------------------------------------------------------------
 
 -- | The 'ChannelInfo' record represents metadata
 --   about a channel
 data ChannelInfo = ChannelInfo
-  { _cdChannelId        :: ChannelId
-    -- ^ The channel's ID
+  { _cdChannelHandle    :: ChannelHandle
+    -- ^ The channel's handle
   , _cdViewed           :: Maybe ServerTime
     -- ^ The last time we looked at a channel
   , _cdNewMessageIndicator :: NewMessageIndicator
@@ -257,6 +266,30 @@ makeClientChannel myId nc = emptyChannelContents >>= \contents ->
   , _ccEditState = defaultEphemeralEditState
   }
 
+makeLogChannel :: IO ClientChannel
+makeLogChannel = do
+    now <- getCurrentTime
+    return ClientChannel { _ccEditState = defaultEphemeralEditState
+                         , _ccContents = ChannelContents { _cdMessages = noMessages
+                                                         , _cdFetchPending = False
+                                                         }
+                         , _ccInfo = ChannelInfo { _cdChannelHandle          = LogChannel
+                                                 , _cdViewed                 = Nothing
+                                                 , _cdNewMessageIndicator    = Hide
+                                                 , _cdEditedMessageThreshold = Nothing
+                                                 , _cdMentionCount           = 0
+                                                 , _cdUpdated                = ServerTime now
+                                                 , _cdName                   = "*logging"
+                                                 , _cdHeader                 = "Matterhorn log messages"
+                                                 , _cdPurpose                = ""
+                                                 , _cdType                   = Ordinary
+                                                 , _cdNotifyProps            = emptyChannelNotifyProps
+                                                 , _cdTypingUsers            = noTypingUsers
+                                                 , _cdDMUserId               = Nothing
+                                                 , _cdSidebarShowOverride    = Nothing
+                                                 }
+                         }
+
 defaultEphemeralEditState :: EphemeralEditState
 defaultEphemeralEditState =
     EphemeralEditState { _eesMultiline = False
@@ -268,10 +301,6 @@ canLeaveChannel :: ChannelInfo -> Bool
 canLeaveChannel cInfo = not $ cInfo^.cdType `elem` [Direct]
 
 -- ** Manage the collection of all Channels
-
-data ChannelHandle =
-    ServerChannel ChannelId
-    deriving (Eq, Show, Ord, Generic, Hashable)
 
 -- | Define a binary kinded type to allow derivation of functor.
 data AllMyChannels a =
@@ -305,6 +334,7 @@ addChannel ch cinfo =
          Nothing -> id
          Just uId -> case ch of
              ServerChannel cId -> userChannelMap %~ HM.insert uId cId
+             LogChannel -> id
     )
 
 -- | Remove a channel from the collection.
@@ -316,6 +346,7 @@ removeChannel ch cs =
             Just chan -> channelNameSet %~ S.delete (chan^.ccInfo.cdName)
         maybeRemoveUserMapping = case ch of
             ServerChannel cId -> userChannelMap %~ HM.filter (/= cId)
+            LogChannel -> id
     in cs & chanMap %~ HM.delete ch
           & removeChannelName
           & maybeRemoveUserMapping

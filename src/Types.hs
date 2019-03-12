@@ -209,7 +209,6 @@ module Types
   , userByNickname
   , channelHandleByChannelName
   , channelIdByUsername
-  , channelByName
   , userById
   , allUserIds
   , addNewUser
@@ -304,6 +303,7 @@ data PasswordSource =
 data ChannelListGroup =
     ChannelGroupPublicChannels
     | ChannelGroupDirectMessages
+    | ChannelGroupMatterhorn
     deriving (Eq)
 
 -- | The type of channel list entries.
@@ -314,6 +314,8 @@ data ChannelListEntry =
     -- ^ A single-user DM entry
     | CLGroupDM ChannelId
     -- ^ A multi-user DM entry
+    | CLLogChannel
+    -- ^ The logging channel
     deriving (Eq, Show)
 
 -- | This is how we represent the user's configuration. Most fields
@@ -422,8 +424,8 @@ data UserPreferences =
                     }
 
 hasUnread :: ChatState -> ChannelHandle -> Bool
-hasUnread st cId = fromMaybe False $
-    hasUnread' <$> findChannelByHandle cId (_csChannels st)
+hasUnread st ch = fromMaybe False $
+    hasUnread' <$> findChannelByHandle ch (_csChannels st)
 
 hasUnread' :: ClientChannel -> Bool
 hasUnread' chan = fromMaybe False $ do
@@ -440,14 +442,19 @@ mkChannelZipperList :: UTCTime
                     -> Users
                     -> [(ChannelListGroup, [ChannelListEntry])]
 mkChannelZipperList now config cconfig prefs cs us =
-    [ (ChannelGroupPublicChannels, getNonDMChannelIdsInOrder cs)
+    [ (ChannelGroupMatterhorn, [CLLogChannel])
+    , (ChannelGroupPublicChannels, getNonDMChannelIdsInOrder cs)
     , (ChannelGroupDirectMessages, getDMChannelsInOrder now config cconfig prefs us cs)
     ]
 
 getNonDMChannelIdsInOrder :: ClientChannels -> [ChannelListEntry]
 getNonDMChannelIdsInOrder cs =
     let matches (_, info) = info^.ccInfo.cdType `notElem` [Direct, Group]
-    in fmap (\(ServerChannel cId, _) -> CLChannel cId) $
+    in catMaybes $
+       fmap (\(ch, _) -> case ch of
+        ServerChannel cId -> Just $ CLChannel cId
+        LogChannel -> Nothing
+        ) $
        sortBy (comparing ((^.ccInfo.cdName) . snd)) $
        filteredChannels matches cs
 
@@ -545,18 +552,21 @@ dmChannelShouldAppear now config prefs c =
 
 groupChannelShouldAppear :: UTCTime -> Config -> UserPreferences -> ClientChannel -> Bool
 groupChannelShouldAppear now config prefs c =
-    let ndays = configDirectChannelExpirationDays config
-        localCutoff = addUTCTime (nominalDay * (-(fromIntegral ndays))) now
-        cutoff = ServerTime localCutoff
-        updated = c^.ccInfo.cdUpdated
-    in if hasUnread' c || maybe False (>= localCutoff) (c^.ccInfo.cdSidebarShowOverride)
-       then True
-       else case groupChannelShowPreference prefs (c^.ccInfo.cdChannelId) of
-           Just False -> False
-           _ -> or [
-                   -- The channel was updated recently enough
-                     updated >= cutoff
-                   ]
+    case c^.ccInfo.cdChannelHandle of
+        LogChannel -> False
+        ServerChannel cId ->
+            let ndays = configDirectChannelExpirationDays config
+                localCutoff = addUTCTime (nominalDay * (-(fromIntegral ndays))) now
+                cutoff = ServerTime localCutoff
+                updated = c^.ccInfo.cdUpdated
+            in if hasUnread' c || maybe False (>= localCutoff) (c^.ccInfo.cdSidebarShowOverride)
+               then True
+               else case groupChannelShowPreference prefs cId of
+                   Just False -> False
+                   _ -> or [
+                           -- The channel was updated recently enough
+                             updated >= cutoff
+                           ]
 
 dmChannelShowPreference :: UserPreferences -> UserId -> Maybe Bool
 dmChannelShowPreference ps uId = HM.lookup uId (_userPrefDirectChannelPrefs ps)
@@ -1351,6 +1361,7 @@ channelListEntryChannelHandle :: ChannelListEntry -> ChannelHandle
 channelListEntryChannelHandle (CLChannel cId) = ServerChannel cId
 channelListEntryChannelHandle (CLUserDM cId _) = ServerChannel cId
 channelListEntryChannelHandle (CLGroupDM cId) = ServerChannel cId
+channelListEntryChannelHandle CLLogChannel = LogChannel
 
 channelListEntryUserId :: ChannelListEntry -> Maybe UserId
 channelListEntryUserId (CLUserDM _ uId) = Just uId
@@ -1363,6 +1374,7 @@ userIdsFromZipper z =
 entryIsDMEntry :: ChannelListEntry -> Bool
 entryIsDMEntry (CLUserDM {}) = True
 entryIsDMEntry (CLGroupDM {}) = True
+entryIsDMEntry (CLLogChannel {}) = False
 entryIsDMEntry (CLChannel {}) = False
 
 csCurrentChannel :: Lens' ChatState ClientChannel
@@ -1442,11 +1454,6 @@ channelIdByUsername name st = do
 useNickname :: ChatState -> Bool
 useNickname st =
     useNickname' (st^.csClientConfig) (st^.csResources.crUserPreferences)
-
-channelByName :: Text -> ChatState -> Maybe ClientChannel
-channelByName n st = do
-    ch <- channelHandleByChannelName n st
-    findChannelByHandle ch (st^.csChannels)
 
 trimChannelSigil :: Text -> Text
 trimChannelSigil n

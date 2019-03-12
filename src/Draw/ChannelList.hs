@@ -71,6 +71,7 @@ renderChannelListGroupHeading g anyUnread =
     let label = case g of
             ChannelGroupPublicChannels -> "Public Channels"
             ChannelGroupDirectMessages -> "Direct Messages"
+            ChannelGroupMatterhorn -> "Matterhorn"
         addUnread = if anyUnread
                     then (<+> (withDefAttr unreadGroupMarkerAttr $ txt "*"))
                     else id
@@ -116,6 +117,8 @@ mkChannelEntryData st e =
                             then u^.uiNickName.non (u^.uiName)
                             else u^.uiName
                 in (uname, Just $ T.singleton $ userSigilFromInfo u, True, Just $ u^.uiStatus)
+            CLLogChannel ->
+                (chan^.ccInfo.cdName, Nothing, False, Nothing)
         sigilWithSpace = sigil <> if addSpace then " " else ""
         prevEditSigil = "»"
         sigil = if current

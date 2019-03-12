@@ -124,6 +124,7 @@ doUserAutoCompletion searchString = do
     let label = "Users"
         mCid = case ch of
             ServerChannel cId -> Just cId
+            LogChannel -> Nothing
 
     withCachedAutocompleteResults label searchString $
         doAsyncWith Preempt $ do

@@ -219,44 +219,47 @@ commandList =
 
 execMMCommand :: Text -> Text -> MH ()
 execMMCommand name rest = do
-  ServerChannel cId <- use csCurrentChannelHandle
-  session  <- getSession
-  em       <- use (csEditState.cedEditMode)
-  tId      <- gets myTeamId
-  let mc = MM.MinCommand
-             { MM.minComChannelId = cId
-             , MM.minComCommand   = "/" <> name <> " " <> rest
-             , MM.minComParentId  = case em of
-                 Replying _ p -> Just $ MM.getId p
-                 Editing p _  -> MM.postRootId p
-                 _            -> Nothing
-             , MM.minComRootId  = case em of
-                 Replying _ p -> MM.postRootId p <|> (Just $ MM.postId p)
-                 Editing p _  -> MM.postRootId p
-                 _            -> Nothing
-             , MM.minComTeamId = tId
-             }
-      runCmd = liftIO $ do
-        void $ MM.mmExecuteCommand mc session
-      handleHTTP (MM.HTTPResponseException err) =
-        return (Just (T.pack err))
-        -- XXX: this might be a bit brittle in the future, because it
-        -- assumes the shape of an error message. We might want to
-        -- think about a better way of discovering this error and
-        -- reporting it accordingly?
-      handleCmdErr (MM.MattermostServerError err) =
-        let (_, msg) = T.breakOn ": " err in
-          return (Just (T.drop 2 msg))
-      handleMMErr (MM.MattermostError
-                     { MM.mattermostErrorMessage = msg }) =
-        return (Just msg)
-  errMsg <- liftIO $ (runCmd >> return Nothing) `Exn.catch` handleHTTP
-                                                `Exn.catch` handleCmdErr
-                                                `Exn.catch` handleMMErr
-  case errMsg of
-    Nothing -> return ()
-    Just err ->
-      mhError $ GenericError ("Error running command: " <> err)
+  ch <- use csCurrentChannelHandle
+  case ch of
+      LogChannel -> return ()
+      ServerChannel cId -> do
+          session  <- getSession
+          em       <- use (csEditState.cedEditMode)
+          tId      <- gets myTeamId
+          let mc = MM.MinCommand
+                     { MM.minComChannelId = cId
+                     , MM.minComCommand   = "/" <> name <> " " <> rest
+                     , MM.minComParentId  = case em of
+                         Replying _ p -> Just $ MM.getId p
+                         Editing p _  -> MM.postRootId p
+                         _            -> Nothing
+                     , MM.minComRootId  = case em of
+                         Replying _ p -> MM.postRootId p <|> (Just $ MM.postId p)
+                         Editing p _  -> MM.postRootId p
+                         _            -> Nothing
+                     , MM.minComTeamId = tId
+                     }
+              runCmd = liftIO $ do
+                void $ MM.mmExecuteCommand mc session
+              handleHTTP (MM.HTTPResponseException err) =
+                return (Just (T.pack err))
+                -- XXX: this might be a bit brittle in the future, because it
+                -- assumes the shape of an error message. We might want to
+                -- think about a better way of discovering this error and
+                -- reporting it accordingly?
+              handleCmdErr (MM.MattermostServerError err) =
+                let (_, msg) = T.breakOn ": " err in
+                  return (Just (T.drop 2 msg))
+              handleMMErr (MM.MattermostError
+                             { MM.mattermostErrorMessage = msg }) =
+                return (Just msg)
+          errMsg <- liftIO $ (runCmd >> return Nothing) `Exn.catch` handleHTTP
+                                                        `Exn.catch` handleCmdErr
+                                                        `Exn.catch` handleMMErr
+          case errMsg of
+            Nothing -> return ()
+            Just err ->
+              mhError $ GenericError ("Error running command: " <> err)
 
 dispatchCommand :: Text -> MH ()
 dispatchCommand cmd =

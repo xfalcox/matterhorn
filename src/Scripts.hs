@@ -50,6 +50,7 @@ runScript outputChan fp text = do
                 case ch of
                     ServerChannel cId -> do
                         sendMessage cId mode (T.pack $ programStdout po) []
+                    LogChannel -> return ()
             False -> Nothing
     ExitFailure _ -> Nothing
 

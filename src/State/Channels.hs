@@ -123,8 +123,12 @@ updateSidebar = do
 updateViewed :: Bool -> MH ()
 updateViewed updatePrev = do
     csCurrentChannel.ccInfo.cdMentionCount .= 0
-    ServerChannel cId <- use csCurrentChannelHandle
-    updateViewedChan updatePrev cId
+    ch <- use csCurrentChannelHandle
+    case ch of
+        -- TODO probably want to set the viewed time of the client
+        -- channel to the local time here.
+        LogChannel -> return ()
+        ServerChannel cId -> updateViewedChan updatePrev cId
 
 -- | When a new channel has been selected for viewing, this will
 -- notify the server of the change, and also update the local channel
@@ -147,6 +151,7 @@ updateViewedChan updatePrev cId = use csConnectionStatus >>= \case
                 ch <- mpCh
                 case ch of
                     ServerChannel pcId -> return pcId
+                    LogChannel -> Nothing
 
         doAsyncChannelMM Preempt cId
           (\s _ c -> MM.mmViewChannel UserMe c mpChanId s)
@@ -167,25 +172,28 @@ toggleChannelListVisibility = do
 
 hideCurrentDMChannel :: MH ()
 hideCurrentDMChannel = do
-    ServerChannel cId <- use csCurrentChannelHandle
-    hideDMChannel cId
+    ch <- use csCurrentChannelHandle
+    case ch of
+        LogChannel -> return ()
+        ServerChannel cId -> hideDMChannel cId
 
 hideDMChannel :: ChannelId -> MH ()
 hideDMChannel cId = do
     me <- gets myUser
     session <- getSession
+    let ch = ServerChannel cId
     withChannel cId $ \chan -> do
         case chan^.ccInfo.cdType of
             Direct -> do
                 let pref = showDirectChannelPref (me^.userIdL) uId False
                     Just uId = chan^.ccInfo.cdDMUserId
-                csChannel(ServerChannel cId).ccInfo.cdSidebarShowOverride .= Nothing
+                csChannel(ch).ccInfo.cdSidebarShowOverride .= Nothing
                 doAsyncWith Preempt $ do
                     MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
                     return Nothing
             Group -> do
                 let pref = hideGroupChannelPref cId (me^.userIdL)
-                csChannel(ServerChannel cId).ccInfo.cdSidebarShowOverride .= Nothing
+                csChannel(ch).ccInfo.cdSidebarShowOverride .= Nothing
                 doAsyncWith Preempt $ do
                     MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
                     return Nothing
@@ -428,8 +436,11 @@ updateChannelInfo cid new member = do
     updateSidebar
 
 setFocus :: ChannelHandle -> MH ()
-setFocus ch@(ServerChannel cId) = do
-    showChannelInSidebar cId True
+setFocus ch = do
+    case ch of
+        LogChannel -> return ()
+        ServerChannel cId -> showChannelInSidebar cId True
+
     setFocusWith True (Z.findRight ((== ch) . channelListEntryChannelHandle))
 
 showChannelInSidebar :: ChannelId -> Bool -> MH ()
@@ -454,7 +465,7 @@ showChannelInSidebar cId setPending = do
                         Just False -> do
                             let pref = showDirectChannelPref (me^.userIdL) uId True
                             when setPending $
-                                csPendingChannelChange .= Just (ChangeByChannelId $ chan^.ccInfo.cdChannelId)
+                                csPendingChannelChange .= Just (ChangeByChannelId cId)
                             doAsyncWith Preempt $ do
                                 MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
                                 return Nothing
@@ -465,7 +476,7 @@ showChannelInSidebar cId setPending = do
                         Just False -> do
                             let pref = showGroupChannelPref cId (me^.userIdL)
                             when setPending $
-                                csPendingChannelChange .= Just (ChangeByChannelId $ chan^.ccInfo.cdChannelId)
+                                csPendingChannelChange .= Just (ChangeByChannelId cId)
                             doAsyncWith Preempt $ do
                                 MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
                                 return Nothing
@@ -649,18 +660,27 @@ refreshChannelById cId = do
             refreshChannel SidebarUpdateImmediate cwd member
 
 removeChannelFromState :: ChannelHandle -> MH ()
-removeChannelFromState ch@(ServerChannel cId) = do
-    withChannel cId $ \ chan -> do
-        when (chan^.ccInfo.cdType /= Direct) $ do
-            origFocus <- use csCurrentChannelHandle
-            when (origFocus == ch) nextChannelSkipPrevView
-            -- Update input history
-            csEditState.cedInputHistory %= removeChannelHistory cId
-            -- Update msgMap
-            csChannels %= removeChannel ch
-            -- Remove from focus zipper
-            csFocus %= Z.filterZipper ((/= ServerChannel cId) . channelListEntryChannelHandle)
-            updateSidebar
+removeChannelFromState ch = do
+    canRemove <- do
+        mChan <- preuse $ csChannel ch
+        case mChan of
+            Nothing -> return False
+            Just chan -> return (chan^.ccInfo.cdType /= Direct)
+
+    when canRemove $ do
+        origFocus <- use csCurrentChannelHandle
+        when (origFocus == ch) nextChannelSkipPrevView
+
+        -- Update input history
+        case ch of
+            LogChannel -> return ()
+            ServerChannel cId -> csEditState.cedInputHistory %= removeChannelHistory cId
+
+        -- Update msgMap
+        csChannels %= removeChannel ch
+        -- Remove from focus zipper
+        csFocus %= Z.filterZipper ((/= ch) . channelListEntryChannelHandle)
+        updateSidebar
 
 nextChannel :: MH ()
 nextChannel = setFocusWith True Z.right
@@ -821,6 +841,8 @@ channelHistoryForward = do
         _ -> return ()
 
 loadHistoryEntryToEditor :: ChannelHandle -> Int -> MH ()
+loadHistoryEntryToEditor LogChannel _idx = do
+    return ()
 loadHistoryEntryToEditor (ServerChannel cId) idx = do
     inputHistory <- use (csEditState.cedInputHistory)
     case getHistoryEntry cId idx inputHistory of
@@ -878,21 +900,27 @@ addUserByNameToCurrentChannel uname =
 
 addUserToCurrentChannel :: UserInfo -> MH ()
 addUserToCurrentChannel u = do
-    ServerChannel cId <- use csCurrentChannelHandle
-    session <- getSession
-    let channelMember = MinChannelMember (u^.uiId) cId
-    doAsyncWith Normal $ do
-        tryMM (void $ MM.mmAddUser cId channelMember session)
-              (const $ return Nothing)
+    ch <- use csCurrentChannelHandle
+    case ch of
+        LogChannel -> return ()
+        ServerChannel cId -> do
+            session <- getSession
+            let channelMember = MinChannelMember (u^.uiId) cId
+            doAsyncWith Normal $ do
+                tryMM (void $ MM.mmAddUser cId channelMember session)
+                      (const $ return Nothing)
 
 removeUserFromCurrentChannel :: Text -> MH ()
 removeUserFromCurrentChannel uname =
     withFetchedUser (UserFetchByUsername uname) $ \u -> do
-        ServerChannel cId <- use csCurrentChannelHandle
-        session <- getSession
-        doAsyncWith Normal $ do
-            tryMM (void $ MM.mmRemoveUserFromChannel cId (UserById $ u^.uiId) session)
-                  (const $ return Nothing)
+        ch <- use csCurrentChannelHandle
+        case ch of
+            LogChannel -> return ()
+            ServerChannel cId -> do
+                session <- getSession
+                doAsyncWith Normal $ do
+                    tryMM (void $ MM.mmRemoveUserFromChannel cId (UserById $ u^.uiId) session)
+                          (const $ return Nothing)
 
 startLeaveCurrentChannel :: MH ()
 startLeaveCurrentChannel = do
@@ -1016,17 +1044,24 @@ changeChannelByName name = do
 
 setChannelTopic :: Text -> MH ()
 setChannelTopic msg = do
-    ServerChannel cId <- use csCurrentChannelHandle
-    let patch = defaultChannelPatch { channelPatchHeader = Just msg }
-    doAsyncChannelMM Preempt cId
-        (\s _ _ -> MM.mmPatchChannel cId patch s)
-        (\_ _ -> Nothing)
+    ch <- use csCurrentChannelHandle
+    case ch of
+        LogChannel -> return ()
+        ServerChannel cId -> do
+            let patch = defaultChannelPatch { channelPatchHeader = Just msg }
+            doAsyncChannelMM Preempt cId
+                (\s _ _ -> MM.mmPatchChannel cId patch s)
+                (\_ _ -> Nothing)
 
 beginCurrentChannelDeleteConfirm :: MH ()
 beginCurrentChannelDeleteConfirm = do
-    ServerChannel cId <- use csCurrentChannelHandle
-    withChannel cId $ \chan -> do
-        let chType = chan^.ccInfo.cdType
-        if chType /= Direct
-            then setMode DeleteChannelConfirm
-            else mhError $ GenericError "Direct message channels cannot be deleted."
+    ch <- use csCurrentChannelHandle
+    case ch of
+        LogChannel ->
+            return ()
+        ServerChannel cId ->
+            withChannel cId $ \chan -> do
+                let chType = chan^.ccInfo.cdType
+                if chType /= Direct
+                    then setMode DeleteChannelConfirm
+                    else mhError $ GenericError "Direct message channels cannot be deleted."

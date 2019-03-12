@@ -65,6 +65,7 @@ toLastRunState cs = LastRunState
   , _lrsUserId            = myUserId cs
   , _lrsSelectedChannelId = case cs^.csCurrentChannelHandle of
       ServerChannel cId -> cId
+      LogChannel -> error "toLastRunState: LogChannel not yet supported here"
   }
 
 lastRunStateFileMode :: P.FileMode

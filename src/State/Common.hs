@@ -15,6 +15,7 @@ module State.Common
   , addEmoteFormatting
   , removeEmoteFormatting
   , fetchUsersByUsername
+  , addClientMessageTo
 
   , module State.Async
   )
@@ -112,19 +113,24 @@ updatePostMap postCollection = do
 
 -- | Add a 'ClientMessage' to the current channel's message list
 addClientMessage :: ClientMessage -> MH ()
-addClientMessage msg = do
-  ch <- use csCurrentChannelHandle
+addClientMessage msg = use csCurrentChannelHandle >>= addClientMessageTo msg
+
+addClientMessageTo :: ClientMessage -> ChannelHandle -> MH ()
+addClientMessageTo msg ch = do
   uuid <- generateUUID
   let addCMsg = ccContents.cdMessages %~
           (addMessage $ clientMessageToMessage msg & mMessageId .~ Just (MessageUUID uuid))
   csChannels %= modifyChannelByHandle ch addCMsg
   mh $ invalidateCacheEntry $ ChannelMessages ch
 
-  let msgTy = case msg^.cmType of
-        Error -> LogError
-        _     -> LogGeneral
+  case ch of
+      LogChannel -> return ()
+      ServerChannel _ -> do
+          let msgTy = case msg^.cmType of
+                Error -> LogError
+                _     -> LogGeneral
 
-  mhLog msgTy $ T.pack $ show msg
+          mhLog msgTy $ T.pack $ show msg
 
 -- | Add a new 'ClientMessage' representing an error message to
 --   the current channel's message list

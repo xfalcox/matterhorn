@@ -261,9 +261,11 @@ initializeState cr myTeam me = do
   -- End thread startup ----------------------------------------------
 
   now <- getCurrentTime
+  logChan <- makeLogChannel
+
   let chanIds = mkChannelZipperList now (cr^.crConfiguration) Nothing (cr^.crUserPreferences) clientChans noUsers
       chanZip = Z.fromList chanIds
-      clientChans = foldr (uncurry addChannel) noChannels chanPairs
+      clientChans = foldr (uncurry addChannel) noChannels ((LogChannel, logChan):chanPairs)
       startupState =
           StartupStateInfo { startupStateResources      = cr
                            , startupStateChannelZipper  = chanZip

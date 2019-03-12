@@ -80,6 +80,8 @@ updateChannelSelectMatches = do
             userById uId st >>= userMatches e
         matches e@(CLGroupDM cId) =
             findChannelByHandle (ServerChannel cId) (st^.csChannels) >>= groupChanMatches e
+        matches e@CLLogChannel =
+            findChannelByHandle LogChannel (st^.csChannels) >>= chanMatches e
 
         preserveFocus Nothing _ = False
         preserveFocus (Just m) m2 = matchEntry m == matchEntry m2
