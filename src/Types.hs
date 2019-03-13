@@ -258,7 +258,7 @@ import qualified Data.HashMap.Strict as HM
 import           Data.List ( sortBy )
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
-import           Data.Time.Clock ( UTCTime, getCurrentTime, nominalDay, addUTCTime )
+import           Data.Time.Clock ( UTCTime, getCurrentTime, addUTCTime )
 import           Data.UUID ( UUID )
 import qualified Data.Vector as Vec
 import           Lens.Micro.Platform ( at, makeLenses, lens, (%~), (^?!), (.=)
@@ -951,7 +951,6 @@ data Mode =
     | LeaveChannelConfirm
     | DeleteChannelConfirm
     | JoinChannel
-    | ChannelScroll
     | MessageSelect
     | MessageSelectDeleteConfirm
     | PostListOverlay PostListContents

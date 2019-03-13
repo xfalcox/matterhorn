@@ -88,8 +88,10 @@ commandList =
       beginCurrentChannelDeleteConfirm
 
   , Cmd "hide" "Hide the current DM or group channel from the channel list"
-    NoArg $ \ () ->
-      hideCurrentDMChannel
+    NoArg $ \ () -> do
+        ch <- use csCurrentChannelHandle
+        case ch of
+            ServerChannel cId -> hideDMChannel cId
 
   , Cmd "reconnect" "Force a reconnection attempt to the server"
     NoArg $ \ () ->
