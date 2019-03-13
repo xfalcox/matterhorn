@@ -1,24 +1,33 @@
 #!/usr/bin/env bash
 
+# This script will generate a release image appropriate to the local
+# platform type.  These are not natively packaged (e.g. an RPM or DEB
+# file) but are instead tarballs containing the binary as built on/for
+# that platform.
+#
+# 1. git clone -b develop https://github.com/matterhorn-chat/matterhorn
+# 2. cd matterhorn
+# 3. ./mkrelease.sh
+# 4. Copy the generated FILENAME result to the appropriate location.
+#
+# Note that this script will perform a submodule update; the default
+# submodule access is via git/ssh, which requires a local key.  If
+# this script is run from an automated build process, it is
+# recommended to convert the git/ssh submodule url references in
+# .gitmodules to https references itself (e.g.
+#   $ sed -i -e /url/s,git@github.com:,https://github.com/, .gitmodules
+
 set -e
 
 HERE=$(cd `dirname $0`; pwd)
 
 function get_platform {
-    if [ -f "/etc/redhat-release" ]
+    if [ -f "/etc/os-release" ]
     then
-        if grep Fedora /etc/redhat-release >/dev/null
-        then
-            echo "Fedora"
-        elif grep CentOS /etc/redhat-release >/dev/null
-        then
-            echo "CentOS"
-        else
-            echo "Unknown-Redhat"
-        fi
-    elif grep -i ubuntu /etc/apt/sources.list 2>/dev/null >/dev/null
-    then
-        echo "Ubuntu"
+        # Use ID from /etc/os-release because it is a valid
+        # single-word element, whereas NAME may contain spaces.
+        . /etc/os-release
+        echo $ID
     else
         uname -s
     fi
@@ -28,13 +37,23 @@ function get_arch {
     uname -m
 }
 
-VERSION=$(grep "^version:" matterhorn.cabal | awk '{ print $2 }')
+function output_dirname {
+    if [ -f /etc/os-release ]
+    then
+        . /etc/os-release # sets vars, incl VERSION_ID and VERSION_CODENAME
+        echo $BASENAME-$MHVERSION-$PLATFORM-$VERSION_ID-$VERSION_CODENAME-$ARCH
+    else
+        echo $BASENAME-$MHVERSION-$PLATFORM-$ARCH
+    fi
+}
+
+MHVERSION=$(grep "^version:" matterhorn.cabal | awk '{ print $2 }')
 BASENAME=matterhorn
 ARCH=$(get_arch)
 PLATFORM=$(get_platform)
 LONG_HEAD=$(git log | head -1 | awk '{ print $2 }')
 SHORT_HEAD=${LONG_HEAD:0:8}
-DIRNAME=$BASENAME-$VERSION-$PLATFORM-$ARCH
+DIRNAME=$(output_dirname)
 FILENAME=$DIRNAME.tar.bz2
 CABAL_DEPS_REPO=https://github.com/matterhorn-chat/cabal-dependency-licenses.git
 CABAL_DEPS_TOOL_DIR=$HOME/.cabal/bin
@@ -70,9 +89,16 @@ function install_tools {
 
 install_tools
 
-echo Version: $VERSION
+echo Version: $MHVERSION
 echo Filename: $FILENAME
-cd $HERE && git submodule update && ./build.sh
+
+# Perform a build
+cd $HERE
+git submodule update --init
+./build.sh
+
+# Verify that the keybindings are up-to-date
+diff keybindings.md <(cabal new-run matterhorn -- -K)
 
 TMPDIR=$(mktemp -d)
 function cleanup {
@@ -80,6 +106,11 @@ function cleanup {
 }
 trap cleanup EXIT
 
+# Package the build results into a tarball
 mkdir $TMPDIR/$DIRNAME
-prepare_dist $VERSION $TMPDIR/$DIRNAME
+prepare_dist $MHVERSION $TMPDIR/$DIRNAME
 cd $TMPDIR && tar -cj $DIRNAME > $HERE/$FILENAME
+
+echo %%%%%%%%%% completed package build %%%%%%%%%%
+echo Version: $MHVERSION
+echo Filename: $FILENAME

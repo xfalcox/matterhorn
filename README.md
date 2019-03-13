@@ -29,7 +29,11 @@ your server version:
 https://github.com/matterhorn-chat/matterhorn/releases
 
 To run Matterhorn, unpack the binary release archive and run the
-`matterhorn` binary within.
+`matterhorn` binary within.  Help is available via the `--help` or
+`-h` flag.
+
+    $ matterhorn --help
+    $ matterhorn
 
 When you run Matterhorn you'll be prompted for your server information
 and credentials. At present `matterhorn` supports only username/password
@@ -71,15 +75,20 @@ The user interface has three main areas:
 * Bottom: editing area for writing, editing, and replying to messages
 
 You can use built-in keybindings or `/cmd`-style commands to operate
-the client. To see available keybindings and commands, use the default
-binding of `F1` or run the `/help` command. Keybindings may include
-modifiers such as Control (indicated with a `C-` prefix) or Meta
-(indicated with a `M-` prefix). If your keyboard has an `Alt` key, that
-will work as `Meta`. If it does not, you may be able to configure your
-terminal to provide `Meta` via other means (e.g. iTerm2 on OS X can be
-configured to make the left Option key work as Meta). Keybindings can
-be customized in the configuration file; see `/help keybindings` for
-details.
+the client.  Keybinding information may be obtained in a number of ways:
+
+* The `/help` command within Matterhorn.
+* The `F1` key within Matterhorn.
+* Running matterhorn with the `-k` argument for text keybindings
+* Running matterhorn with the `-K` argument for [Markdown keybindings](keybindings.md)
+
+Keybindings may include modifiers such as Control (indicated with a
+`C-` prefix) or Meta (indicated with a `M-` prefix). If your keyboard
+has an `Alt` key, that will work as `Meta`. If it does not, you may be
+able to configure your terminal to provide `Meta` via other means
+(e.g. iTerm2 on OS X can be configured to make the left Option key
+work as Meta). Keybindings can be customized in the configuration
+file; see `/help keybindings` for details.
 
 To join a channel, use the `/join` command to choose from a list of
 available channels. To create a channel, use `/create-channel`. To leave
@@ -213,14 +222,19 @@ $ ./build.sh
 # Our Versioning Scheme
 
 Matterhorn version strings will be of the form `ABBCC.X.Y` where ABBCC
-corresponds to the Mattermost server version supported by the release.
-For example, if a release supports Mattermost server version 1.2.3, the
-ABBCC portion of the `matterhorn` version will be `10203`. The `X.Y`
-portion of the version corresponds to our own version namespace for the
-package. If the server version changes, `X.Y` SHOULD be `0.0`. Otherwise
-the first component should increment if the package undergoes major code
-changes or functionality changes. The second component alone should
-change only if the package undergoes security fixes or other bug fixes.
+corresponds to the lowest Mattermost server version expected to be
+supported by the release.  For example, if a release supports
+Mattermost server version 1.2.3, the ABBCC portion of the `matterhorn`
+version will be `10203`.  There may be later versions of the
+Mattermost server that are supported (e.g. Matterhorn 50200.X.Y
+supports Mattermost server versions 5.2 through at least 5.8).
+
+The `X.Y` portion of the version corresponds to our own version
+namespace for the package. If the server version changes, `X.Y` SHOULD
+be `0.0`. Otherwise the first component should increment if the
+package undergoes major code changes or functionality changes. The
+second component alone should change only if the package undergoes
+security fixes or other bug fixes.
 
 # Our Design Philosophy
 

@@ -5,24 +5,31 @@ sudo: false
 
 matrix:
   include:
-    - env: CABALVER=1.24 GHCVER=7.10.3
-      compiler: ": #GHC 7.10.3"
-      addons: {apt: {packages: [cabal-install-1.24,ghc-7.10.3,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=1.24 GHCVER=8.0.2
+    - env: CABALVER=2.0 GHCVER=8.0.2
       compiler: ": #GHC 8.0.2"
-      addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.2,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=2.0 GHCVER=8.2.1
-      compiler: ": #GHC 8.2.1"
-      addons: {apt: {packages: [cabal-install-2.0,ghc-8.2.1,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
-    - env: CABALVER=2.0 GHCVER=8.4.1
-      compiler: ": #GHC 8.4.1"
-      addons: {apt: {packages: [cabal-install-2.0,ghc-8.4.1,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
+      addons: {apt: {packages: [cabal-install-2.0,ghc-8.0.2,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
+    - env: CABALVER=2.0 GHCVER=8.2.2
+      compiler: ": #GHC 8.2.2"
+      addons: {apt: {packages: [cabal-install-2.0,ghc-8.2.2,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
+    - env: CABALVER=2.0 GHCVER=8.4.4
+      compiler: ": #GHC 8.4.4"
+      addons: {apt: {packages: [cabal-install-2.0,ghc-8.4.4,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
+    - env: CABALVER=2.0 GHCVER=8.6.3
+      compiler: ": #GHC 8.6.3"
+      addons: {apt: {packages: [cabal-install-2.0,ghc-8.6.3,alex-3.1.7,happy-1.19.5], sources: [hvr-ghc]}}
+
+# Manually checkout git submodules; .gitmodules must be adjusted to
+# use https protocol instead of git/ssh protocol first.
+git:
+  submodules: false
 
 before_install:
  - unset CC
  - export HAPPYVER=1.19.5
  - export ALEXVER=3.1.7
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:/opt/happy/$HAPPYVER/bin:/opt/alex/$ALEXVER/bin:$PATH
+ - sed -i -e /url/s,git@github.com:,https://github.com/, .gitmodules
+ - git submodule update --init
 
 install:
  - cabal --version
@@ -41,7 +48,7 @@ script:
  - if [ -f configure.ac ]; then autoreconf -i; fi
  - cabal check
  - cp cabal.project.travis cabal.project.local
- - bash install.sh
+ - bash build.sh
  - cabal sdist
 
 cache:
