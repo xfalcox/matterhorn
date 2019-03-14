@@ -92,6 +92,7 @@ commandList =
         ch <- use csCurrentChannelHandle
         case ch of
             ServerChannel cId -> hideDMChannel cId
+            LogChannel -> return ()
 
   , Cmd "reconnect" "Force a reconnection attempt to the server"
     NoArg $ \ () ->
