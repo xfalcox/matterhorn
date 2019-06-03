@@ -27,7 +27,7 @@ import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import           Graphics.Vty ( outputIface )
-import           Graphics.Vty.Output.Interface ( ringTerminalBell )
+import           Graphics.Vty.Output.Interface ( ringTerminalBell, setStatusLine )
 import           Lens.Micro.Platform ( Traversal', (.=), (%=), (%~), (.~), (^?)
                                      , to, at, traversed, filtered, ix, _1 )
 
@@ -602,9 +602,11 @@ maybeNotify (RecentPost post mentioned) = runNotifyCommand post mentioned
 
 maybeRingBell :: MH ()
 maybeRingBell = do
+    vty <- mh getVtyHandle
+    void $ liftIO $ setStatusLine (outputIface vty) "matterhorn (*)"
+
     doBell <- use (csResources.crConfiguration.to configActivityBell)
     when doBell $ do
-        vty <- mh getVtyHandle
         liftIO $ ringTerminalBell $ outputIface vty
 
 -- | When we add posts to the application state, we either get them
