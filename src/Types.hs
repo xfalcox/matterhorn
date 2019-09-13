@@ -34,7 +34,7 @@ module Types
   , ViewMessageWindowTab(..)
   , clearChannelUnreadStatus
   , ChannelListEntry(..)
-  , channelListEntryChannelId
+  , channelListEntryChannelRef
   , channelListEntryUserId
   , userIdsFromZipper
   , entryIsDMEntry
@@ -70,7 +70,7 @@ module Types
   , csResources
   , csFocus
   , csCurrentChannel
-  , csCurrentChannelId
+  , csCurrentChannelRef
   , csUrlList
   , csShowMessagePreview
   , csShowChannelList
@@ -229,7 +229,7 @@ module Types
   , usernameForUserId
   , userByUsername
   , userByNickname
-  , channelIdByChannelName
+  , channelRefByChannelName
   , channelIdByUsername
   , channelByName
   , userById
@@ -448,9 +448,9 @@ data UserPreferences =
                     , _userPrefTeammateNameDisplayMode :: Maybe TeammateNameDisplayMode
                     }
 
-hasUnread :: ChatState -> ChannelId -> Bool
-hasUnread st cId = fromMaybe False $
-    hasUnread' <$> findChannelById cId (_csChannels st)
+hasUnread :: ChatState -> ChanRef -> Bool
+hasUnread st cr = fromMaybe False $
+    hasUnread' <$> findChannelByRef cr (_csChannels st)
 
 hasUnread' :: ClientChannel -> Bool
 hasUnread' chan = fromMaybe False $ do
@@ -474,7 +474,7 @@ mkChannelZipperList now config cconfig prefs cs us =
 getNonDMChannelIdsInOrder :: ClientChannels -> [ChannelListEntry]
 getNonDMChannelIdsInOrder cs =
     let matches (_, info) = info^.ccInfo.cdType `notElem` [Direct, Group]
-    in fmap (CLChannel . fst) $
+    in fmap (CLChannel . unServerChannel . fst) $
        sortBy (comparing ((^.ccInfo.cdName) . snd)) $
        filteredChannels matches cs
 
@@ -523,7 +523,7 @@ getGroupDMChannels :: UTCTime
 getGroupDMChannels now config prefs cs =
     let matches (_, info) = info^.ccInfo.cdType == Group &&
                             groupChannelShouldAppear now config prefs info
-    in fmap (\(cId, ch) -> (hasUnread' ch, ch^.ccInfo.cdName, CLGroupDM cId)) $
+    in fmap (\(ServerChannel cId, ch) -> (hasUnread' ch, ch^.ccInfo.cdName, CLGroupDM cId)) $
        filteredChannels matches cs
 
 getDMChannels :: UTCTime
@@ -596,7 +596,7 @@ groupChannelShowPreference ps cId = HM.lookup cId (_userPrefGroupChannelPrefs ps
 -- | This 'Name' type is the type used in 'brick' to identify various
 -- parts of the interface.
 data Name =
-    ChannelMessages ChannelId
+    ChannelMessages ChanRef
     | MessageInput
     | ChannelList
     | HelpViewport
@@ -914,7 +914,7 @@ data ChatEditState =
     ChatEditState { _cedEditor :: Editor Text Name
                   , _cedEditMode :: EditMode
                   , _cedEphemeral :: EphemeralEditState
-                  , _cedInputHistory :: InputHistory
+                  , _cedInputHistory :: InputHistory ChanRef
                   -- ^ The map of per-channel input history for the
                   -- application. We don't distribute the per-channel
                   -- history into the per-channel states (like we do
@@ -951,7 +951,7 @@ data AttachmentData =
 
 -- | We can initialize a new 'ChatEditState' value with just an edit
 -- history, which we save locally.
-emptyEditState :: InputHistory -> Maybe (Aspell, IO ()) -> IO ChatEditState
+emptyEditState :: InputHistory ChanRef -> Maybe (Aspell, IO ()) -> IO ChatEditState
 emptyEditState hist sp = do
     browser <- FB.newFileBrowser FB.selectNonDirectories AttachmentFileBrowser Nothing
     return ChatEditState { _cedEditor               = editor MessageInput Nothing ""
@@ -1226,7 +1226,7 @@ data ChatState =
               , _csChannelSelectState :: ChannelSelectState
               -- ^ The state of the user's input and selection for
               -- channel selection mode.
-              , _csRecentChannel :: Maybe ChannelId
+              , _csRecentChannel :: Maybe ChanRef
               -- ^ The most recently-selected channel, if any.
               , _csUrlList :: List Name LinkChoice
               -- ^ The URL list used to show URLs drawn from messages in
@@ -1287,7 +1287,7 @@ data StartupStateInfo =
                      , startupStateConnectedUser  :: User
                      , startupStateTeam           :: Team
                      , startupStateTimeZone       :: TimeZoneSeries
-                     , startupStateInitialHistory :: InputHistory
+                     , startupStateInitialHistory :: InputHistory ChanRef
                      , startupStateSpellChecker   :: Maybe (Aspell, IO ())
                      }
 
@@ -1671,13 +1671,13 @@ resetSpellCheckTimer s =
         Just (_, reset) -> reset
 
 -- ** Utility Lenses
-csCurrentChannelId :: SimpleGetter ChatState ChannelId
-csCurrentChannelId = csFocus.to unsafeFocus.to channelListEntryChannelId
+csCurrentChannelRef :: SimpleGetter ChatState ChanRef
+csCurrentChannelRef = csFocus.to unsafeFocus.to channelListEntryChannelRef
 
-channelListEntryChannelId :: ChannelListEntry -> ChannelId
-channelListEntryChannelId (CLChannel cId) = cId
-channelListEntryChannelId (CLUserDM cId _) = cId
-channelListEntryChannelId (CLGroupDM cId) = cId
+channelListEntryChannelRef :: ChannelListEntry -> ChanRef
+channelListEntryChannelRef (CLChannel cId) = ServerChannel cId
+channelListEntryChannelRef (CLUserDM cId _) = ServerChannel cId
+channelListEntryChannelRef (CLGroupDM cId) = ServerChannel cId
 
 channelListEntryUserId :: ChannelListEntry -> Maybe UserId
 channelListEntryUserId (CLUserDM _ uId) = Just uId
@@ -1694,19 +1694,18 @@ entryIsDMEntry (CLChannel {}) = False
 
 csCurrentChannel :: Lens' ChatState ClientChannel
 csCurrentChannel =
-    lens (\ st -> findChannelById (st^.csCurrentChannelId) (st^.csChannels) ^?! _Just)
-         (\ st n -> st & csChannels %~ addChannel (st^.csCurrentChannelId) n)
+    lens (\ st -> findChannelByRef (st^.csCurrentChannelRef) (st^.csChannels) ^?! _Just)
+         (\ st n -> st & csChannels %~ addChannel (st^.csCurrentChannelRef) n)
 
-csChannel :: ChannelId -> Traversal' ChatState ClientChannel
-csChannel cId =
-    csChannels . channelByIdL cId
+csChannel :: ChanRef -> Traversal' ChatState ClientChannel
+csChannel cr = csChannels . channelByRefL cr
 
-withChannel :: ChannelId -> (ClientChannel -> MH ()) -> MH ()
-withChannel cId = withChannelOrDefault cId ()
+withChannel :: ChanRef -> (ClientChannel -> MH ()) -> MH ()
+withChannel cr = withChannelOrDefault cr ()
 
-withChannelOrDefault :: ChannelId -> a -> (ClientChannel -> MH a) -> MH a
-withChannelOrDefault cId deflt mote = do
-    chan <- preuse (csChannel(cId))
+withChannelOrDefault :: ChanRef -> a -> (ClientChannel -> MH a) -> MH a
+withChannelOrDefault cr deflt mote = do
+    chan <- preuse (csChannel(cr))
     case chan of
         Nothing -> return deflt
         Just c  -> mote c
@@ -1765,8 +1764,8 @@ userIdForUsername :: Text -> ChatState -> Maybe UserId
 userIdForUsername name st =
     fst <$> (findUserByUsername name $ st^.csUsers)
 
-channelIdByChannelName :: Text -> ChatState -> Maybe ChannelId
-channelIdByChannelName name st =
+channelRefByChannelName :: Text -> ChatState -> Maybe ChanRef
+channelRefByChannelName name st =
     let matches (_, cc) = cc^.ccInfo.cdName == (trimChannelSigil name)
     in listToMaybe $ fst <$> filteredChannels matches (st^.csChannels)
 
@@ -1781,8 +1780,8 @@ useNickname st =
 
 channelByName :: Text -> ChatState -> Maybe ClientChannel
 channelByName n st = do
-    cId <- channelIdByChannelName n st
-    findChannelById cId (st^.csChannels)
+    cr <- channelRefByChannelName n st
+    findChannelByRef cr (st^.csChannels)
 
 trimChannelSigil :: Text -> Text
 trimChannelSigil n
@@ -1908,21 +1907,21 @@ specialUserMentions = ["all", "channel", "here"]
 addSpecialUserMentions :: Set Text -> Set Text
 addSpecialUserMentions s = foldr Set.insert s specialUserMentions
 
-getNewMessageCutoff :: ChannelId -> ChatState -> Maybe NewMessageIndicator
-getNewMessageCutoff cId st = do
-    cc <- st^?csChannel(cId)
+getNewMessageCutoff :: ChanRef -> ChatState -> Maybe NewMessageIndicator
+getNewMessageCutoff cr st = do
+    cc <- st^?csChannel(cr)
     return $ cc^.ccInfo.cdNewMessageIndicator
 
-getEditedMessageCutoff :: ChannelId -> ChatState -> Maybe ServerTime
-getEditedMessageCutoff cId st = do
-    cc <- st^?csChannel(cId)
+getEditedMessageCutoff :: ChanRef -> ChatState -> Maybe ServerTime
+getEditedMessageCutoff cr st = do
+    cc <- st^?csChannel(cr)
     cc^.ccInfo.cdEditedMessageThreshold
 
-clearChannelUnreadStatus :: ChannelId -> MH ()
-clearChannelUnreadStatus cId = do
-    mh $ invalidateCacheEntry (ChannelMessages cId)
-    csChannel(cId) %= (clearNewMessageIndicator .
-                       clearEditedThreshold)
+clearChannelUnreadStatus :: ChanRef -> MH ()
+clearChannelUnreadStatus cr = do
+    mh $ invalidateCacheEntry (ChannelMessages cr)
+    csChannel(cr) %= (clearNewMessageIndicator .
+                      clearEditedThreshold)
 
 data OpenInBrowser =
     OpenLinkChoice LinkChoice

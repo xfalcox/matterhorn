@@ -64,7 +64,7 @@ createPostList contentsType fetchOp = do
           postsSpec p = Posts { postsPosts = fromList [(postId p, p)]
                               , postsOrder = fromList [postId p]
                               }
-      mapM_ (\p -> addObtainedMessages (postChannelId p) 0 False $ postsSpec p) plist
+      mapM_ (\p -> addObtainedMessages (ServerChannel $ postChannelId p) 0 False $ postsSpec p) plist
       enterPostListMode contentsType messages
 
 
@@ -144,7 +144,7 @@ postListJumpToCurrent = do
         Just msg ->
           case msg ^. mChannelId of
             Just cId -> do
-              setFocus cId
+              setFocus $ ServerChannel cId
               setMode MessageSelect
               csMessageSelect .= MessageSelectState (msg^.mMessageId)
             Nothing ->

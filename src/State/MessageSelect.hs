@@ -95,12 +95,13 @@ viewSelectedMessage = do
 
 fillSelectedGap :: MH ()
 fillSelectedGap = do
-  selected <- use (to getSelectedMessage)
-  case selected of
-    Just msg
-      | isGap msg -> do cId <- use csCurrentChannelId
-                        asyncFetchMessagesForGap cId msg
-    _        -> return ()
+  cr <- use csCurrentChannelRef
+  case cr of
+      ServerChannel cId -> do
+          selected <- use (to getSelectedMessage)
+          case selected of
+            Just msg | isGap msg -> asyncFetchMessagesForGap cId msg
+            _ -> return ()
 
 viewMessage :: Message -> MH ()
 viewMessage m = do
@@ -214,18 +215,20 @@ deleteSelectedMessage :: MH ()
 deleteSelectedMessage = do
     selectedMessage <- use (to getSelectedMessage)
     st <- use id
-    cId <- use csCurrentChannelId
-    case selectedMessage of
-        Just msg | isMine st msg && isDeletable msg ->
-            case msg^.mOriginalPost of
-              Just p ->
-                  doAsyncChannelMM Preempt cId
-                      (\s _ _ -> MM.mmDeletePost (postId p) s)
-                      (\_ _ -> Just $ do
-                          csEditState.cedEditMode .= NewPost
-                          setMode Main)
-              Nothing -> return ()
-        _ -> return ()
+    cr <- use csCurrentChannelRef
+    case cr of
+        ServerChannel cId ->
+            case selectedMessage of
+                Just msg | isMine st msg && isDeletable msg ->
+                    case msg^.mOriginalPost of
+                      Just p ->
+                          doAsyncChannelMM Preempt cId
+                              (\s _ _ -> MM.mmDeletePost (postId p) s)
+                              (\_ _ -> Just $ do
+                                  csEditState.cedEditMode .= NewPost
+                                  setMode Main)
+                      Nothing -> return ()
+                _ -> return ()
 
 beginReplyCompose :: MH ()
 beginReplyCompose = do

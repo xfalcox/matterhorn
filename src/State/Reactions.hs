@@ -31,8 +31,9 @@ asyncFetchReactionsForPost cId p
 
 addReactions :: ChannelId -> [Reaction] -> MH ()
 addReactions cId rs = do
-    mh $ invalidateCacheEntry $ ChannelMessages cId
-    csChannel(cId).ccContents.cdMessages %= fmap upd
+    let cr = ServerChannel cId
+    mh $ invalidateCacheEntry $ ChannelMessages cr
+    csChannel(cr).ccContents.cdMessages %= fmap upd
     let mentions = S.fromList $ UserIdMention <$> reactionUserId <$> rs
     fetchMentionedUsers mentions
   where upd msg = msg & mReactions %~ insertAll (msg^.mMessageId)
@@ -44,8 +45,9 @@ addReactions cId rs = do
 
 removeReaction :: Reaction -> ChannelId -> MH ()
 removeReaction r cId = do
-    mh $ invalidateCacheEntry $ ChannelMessages cId
-    csChannel(cId).ccContents.cdMessages %= fmap upd
+    let cr = ServerChannel cId
+    mh $ invalidateCacheEntry $ ChannelMessages cr
+    csChannel(cr).ccContents.cdMessages %= fmap upd
   where upd m | m^.mMessageId == Just (MessagePostId $ r^.reactionPostIdL) =
                   m & mReactions %~ (Map.alter delReaction (r^.reactionEmojiNameL))
               | otherwise = m

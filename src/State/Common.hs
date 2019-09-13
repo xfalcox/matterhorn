@@ -117,12 +117,12 @@ updatePostMap postCollection = do
 -- | Add a 'ClientMessage' to the current channel's message list
 addClientMessage :: ClientMessage -> MH ()
 addClientMessage msg = do
-  cid <- use csCurrentChannelId
+  cr <- use csCurrentChannelRef
   uuid <- generateUUID
   let addCMsg = ccContents.cdMessages %~
           (addMessage $ clientMessageToMessage msg & mMessageId .~ Just (MessageUUID uuid))
-  csChannels %= modifyChannelById cid addCMsg
-  mh $ invalidateCacheEntry $ ChannelMessages cid
+  csChannels %= modifyChannelByRef cr addCMsg
+  mh $ invalidateCacheEntry $ ChannelMessages cr
 
   let msgTy = case msg^.cmType of
         Error -> LogError
@@ -146,10 +146,10 @@ postErrorMessageIO :: Text -> ChatState -> IO ChatState
 postErrorMessageIO err st = do
   msg <- newClientMessage Error err
   uuid <- generateUUID_IO
-  let cId = st ^. csCurrentChannelId
+  let cr = st ^. csCurrentChannelRef
       addEMsg = ccContents.cdMessages %~
           (addMessage $ clientMessageToMessage msg & mMessageId .~ Just (MessageUUID uuid))
-  return $ st & csChannels %~ modifyChannelById cId addEMsg
+  return $ st & csChannels %~ modifyChannelByRef cr addEMsg
 
 openURL :: OpenInBrowser -> MH Bool
 openURL thing = do

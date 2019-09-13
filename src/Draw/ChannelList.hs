@@ -109,11 +109,11 @@ mkChannelEntryData :: ChatState
 mkChannelEntryData st e =
     ChannelListEntryData sigilWithSpace name unread mentions recent current status
     where
-        cId = channelListEntryChannelId e
-        Just chan = findChannelById cId (st^.csChannels)
+        cr = channelListEntryChannelRef e
+        Just chan = findChannelByRef cr (st^.csChannels)
         unread = hasUnread' chan
-        recent = isRecentChannel st cId
-        current = isCurrentChannel st cId
+        recent = isRecentChannel st cr
+        current = isCurrentChannel st cr
         (name, normalSigil, addSpace, status) = case e of
             CLChannel _ ->
                 let (useSigil, space) = case chan^.ccInfo.cdType of

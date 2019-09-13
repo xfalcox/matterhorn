@@ -2,6 +2,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Types.Channels
@@ -12,6 +14,8 @@ module Types.Channels
   , NewMessageIndicator(..)
   , EphemeralEditState(..)
   , EditMode(..)
+  , ChanRef(..)
+  , unServerChannel
   , eesMultiline, eesInputHistoryPosition, eesLastInput
   , defaultEphemeralEditState
   -- * Lenses created for accessing ClientChannel fields
@@ -26,9 +30,10 @@ module Types.Channels
   -- * Creating ClientChannel objects
   , makeClientChannel
   -- * Managing ClientChannel collections
-  , noChannels, addChannel, removeChannel, findChannelById, modifyChannelById
-  , channelByIdL, maybeChannelByIdL
-  , filteredChannelIds
+  , noChannels, addChannel, removeChannel, findChannelByRef, findChannelById, modifyChannelById
+  , modifyChannelByRef
+  , channelByIdL, channelByRefL, maybeChannelByIdL
+  , filteredChannelRefs
   , filteredChannels
   -- * Creating ChannelInfo objects
   , channelInfoFromChannelWithData
@@ -55,9 +60,11 @@ where
 import           Prelude ()
 import           Prelude.MH
 
+import           Data.Hashable ( Hashable )
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Set as S
 import qualified Data.Text as T
+import           GHC.Generics ( Generic )
 import           Lens.Micro.Platform ( (%~), (.~), Traversal', Lens'
                                      , makeLenses, ix, at
                                      , to, non )
@@ -262,11 +269,17 @@ defaultEphemeralEditState =
 canLeaveChannel :: ChannelInfo -> Bool
 canLeaveChannel cInfo = not $ cInfo^.cdType `elem` [Direct]
 
+data ChanRef = ServerChannel ChannelId
+             deriving (Eq, Ord, Show, Generic, Hashable, Read)
+
+unServerChannel :: ChanRef -> ChannelId
+unServerChannel (ServerChannel cId) = cId
+
 -- ** Manage the collection of all Channels
 
 -- | Define a binary kinded type to allow derivation of functor.
 data AllMyChannels a =
-    AllChannels { _chanMap :: HashMap ChannelId a
+    AllChannels { _chanMap :: HashMap ChanRef a
                 , _userChannelMap :: HashMap UserId ChannelId
                 , _channelNameSet :: S.Set Text
                 }
@@ -286,27 +299,29 @@ noChannels :: ClientChannels
 noChannels = AllChannels HM.empty HM.empty mempty
 
 -- | Add a channel to the existing collection.
-addChannel :: ChannelId -> ClientChannel -> ClientChannels -> ClientChannels
-addChannel cId cinfo =
-    (chanMap %~ HM.insert cId cinfo) .
+addChannel :: ChanRef -> ClientChannel -> ClientChannels -> ClientChannels
+addChannel cr cinfo =
+    (chanMap %~ HM.insert cr cinfo) .
     (if cinfo^.ccInfo.cdType `notElem` [Direct, Group]
      then channelNameSet %~ S.insert (cinfo^.ccInfo.cdName)
      else id) .
-    (case cinfo^.ccInfo.cdDMUserId of
-         Nothing -> id
-         Just uId -> userChannelMap %~ HM.insert uId cId
+    (case cr of
+        ServerChannel cId -> case cinfo^.ccInfo.cdDMUserId of
+            Nothing -> id
+            Just uId -> userChannelMap %~ HM.insert uId cId
     )
 
 -- | Remove a channel from the collection.
-removeChannel :: ChannelId -> ClientChannels -> ClientChannels
-removeChannel cId cs =
-    let mChan = findChannelById cId cs
+removeChannel :: ChanRef -> ClientChannels -> ClientChannels
+removeChannel cr cs =
+    let mChan = findChannelByRef cr cs
         removeChannelName = case mChan of
             Nothing -> id
             Just ch -> channelNameSet %~ S.delete (ch^.ccInfo.cdName)
-    in cs & chanMap %~ HM.delete cId
+    in cs & chanMap %~ HM.delete cr
           & removeChannelName
-          & userChannelMap %~ HM.filter (/= cId)
+          & userChannelMap %~ case cr of
+              ServerChannel cId -> HM.filter (/= cId)
 
 getDmChannelFor :: UserId -> ClientChannels -> Maybe ChannelId
 getDmChannelFor uId cs = cs^.userChannelMap.at uId
@@ -316,32 +331,47 @@ allDmChannelMappings = HM.toList . _userChannelMap
 
 -- | Get the ChannelInfo information given the ChannelId
 findChannelById :: ChannelId -> ClientChannels -> Maybe ClientChannel
-findChannelById cId = HM.lookup cId . _chanMap
+findChannelById = findChannelByRef . ServerChannel
+
+-- | Get the ChannelInfo information given the ChanRef
+findChannelByRef :: ChanRef -> ClientChannels -> Maybe ClientChannel
+findChannelByRef cr = HM.lookup cr . _chanMap
 
 -- | Transform the specified channel in place with provided function.
 modifyChannelById :: ChannelId -> (ClientChannel -> ClientChannel)
                   -> ClientChannels -> ClientChannels
-modifyChannelById cId f = chanMap.ix(cId) %~ f
+modifyChannelById cId = modifyChannelByRef (ServerChannel cId)
+
+-- | Transform the specified channel in place with provided function.
+modifyChannelByRef :: ChanRef
+                   -> (ClientChannel -> ClientChannel)
+                   -> ClientChannels -> ClientChannels
+modifyChannelByRef cr f = chanMap.ix cr %~ f
 
 -- | A 'Traversal' that will give us the 'ClientChannel' in a
 -- 'ClientChannels' structure if it exists
 channelByIdL :: ChannelId -> Traversal' ClientChannels ClientChannel
-channelByIdL cId = chanMap . ix cId
+channelByIdL cId = channelByRefL (ServerChannel cId)
+
+-- | A 'Traversal' that will give us the 'ClientChannel' in a
+-- 'ClientChannels' structure if it exists
+channelByRefL :: ChanRef -> Traversal' ClientChannels ClientChannel
+channelByRefL cr = chanMap . ix cr
 
 -- | A 'Lens' that will give us the 'ClientChannel' in a
 -- 'ClientChannels' wrapped in a 'Maybe'
 maybeChannelByIdL :: ChannelId -> Lens' ClientChannels (Maybe ClientChannel)
-maybeChannelByIdL cId = chanMap . at cId
+maybeChannelByIdL cId = chanMap . at (ServerChannel cId)
 
 -- | Apply a filter to each ClientChannel and return a list of the
--- ChannelId values for which the filter matched.
-filteredChannelIds :: (ClientChannel -> Bool) -> ClientChannels -> [ChannelId]
-filteredChannelIds f cc = fst <$> filter (f . snd) (HM.toList (cc^.chanMap))
+-- ChanRef values for which the filter matched.
+filteredChannelRefs :: (ClientChannel -> Bool) -> ClientChannels -> [ChanRef]
+filteredChannelRefs f cc = fst <$> filter (f . snd) (HM.toList (cc^.chanMap))
 
 -- | Filter the ClientChannel collection, keeping only those for which
 -- the provided filter test function returns True.
-filteredChannels :: ((ChannelId, ClientChannel) -> Bool)
-                 -> ClientChannels -> [(ChannelId, ClientChannel)]
+filteredChannels :: ((ChanRef, ClientChannel) -> Bool)
+                 -> ClientChannels -> [(ChanRef, ClientChannel)]
 filteredChannels f cc = filter f $ cc^.chanMap.to HM.toList
 
 ------------------------------------------------------------------------

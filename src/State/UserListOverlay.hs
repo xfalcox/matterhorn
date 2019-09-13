@@ -33,28 +33,32 @@ import           Types
 -- current channel.
 enterChannelMembersUserList :: MH ()
 enterChannelMembersUserList = do
-    cId <- use csCurrentChannelId
-    myId <- gets myUserId
-    myTId <- gets myTeamId
-    enterUserListMode (ChannelMembers cId myTId)
-      (\u -> case u^.uiId /= myId of
-        True -> createOrFocusDMChannel u Nothing >> return True
-        False -> return False
-      )
+    cr <- use csCurrentChannelRef
+    case cr of
+        ServerChannel cId -> do
+            myId <- gets myUserId
+            myTId <- gets myTeamId
+            enterUserListMode (ChannelMembers cId myTId)
+              (\u -> case u^.uiId /= myId of
+                True -> createOrFocusDMChannel u Nothing >> return True
+                False -> return False
+              )
 
 -- | Show the user list overlay for showing users that are not members
 -- of the current channel for the purpose of adding them to the
 -- channel.
 enterChannelInviteUserList :: MH ()
 enterChannelInviteUserList = do
-    cId <- use csCurrentChannelId
-    myId <- gets myUserId
-    myTId <- gets myTeamId
-    enterUserListMode (ChannelNonMembers cId myTId)
-      (\u -> case u^.uiId /= myId of
-        True -> addUserToCurrentChannel u >> return True
-        False -> return False
-      )
+    cr <- use csCurrentChannelRef
+    case cr of
+        ServerChannel cId -> do
+            myId <- gets myUserId
+            myTId <- gets myTeamId
+            enterUserListMode (ChannelNonMembers cId myTId)
+              (\u -> case u^.uiId /= myId of
+                True -> addUserToCurrentChannel u >> return True
+                False -> return False
+              )
 
 -- | Show the user list overlay for showing all users for the purpose of
 -- starting a direct message channel with another user.

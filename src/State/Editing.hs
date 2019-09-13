@@ -44,7 +44,7 @@ import qualified System.IO.Temp as Sys
 import qualified System.Process as Sys
 import           Text.Aspell ( AspellResponse(..), mistakeWord, askAspell )
 
-import           Network.Mattermost.Types ( Post(..), ChannelId )
+import           Network.Mattermost.Types ( Post(..) )
 
 import           Config
 import {-# SOURCE #-} Command ( dispatchCommand )
@@ -204,22 +204,24 @@ getEditorContent = do
 -- *source* of the text, so it also takes care of clearing the editor,
 -- resetting the edit mode, updating the input history for the specified
 -- channel, etc.
-handleInputSubmission :: ChannelId -> Text -> MH ()
-handleInputSubmission cId content = do
+handleInputSubmission :: ChanRef -> Text -> MH ()
+handleInputSubmission cr content = do
     -- We clean up before dispatching the command or sending the message
     -- since otherwise the command could change the state and then doing
     -- cleanup afterwards could clean up the wrong things.
     csEditState.cedEditor %= applyEdit Z.clearZipper
-    csEditState.cedInputHistory %= addHistoryEntry content cId
+    csEditState.cedInputHistory %= addHistoryEntry content cr
     csEditState.cedEphemeral.eesInputHistoryPosition .= Nothing
 
     case T.uncons content of
       Just ('/', cmd) ->
           dispatchCommand cmd
-      _ -> do
-          attachments <- use (csEditState.cedAttachmentList.L.listElementsL)
-          mode <- use (csEditState.cedEditMode)
-          sendMessage cId mode content $ F.toList attachments
+      _ ->
+          case cr of
+              ServerChannel cId -> do
+                  attachments <- use (csEditState.cedAttachmentList.L.listElementsL)
+                  mode <- use (csEditState.cedEditMode)
+                  sendMessage cId mode content $ F.toList attachments
 
     -- Reset the autocomplete UI
     resetAutocomplete
@@ -320,18 +322,21 @@ handleEditingInput e = do
 -- action silently.
 sendUserTypingAction :: MH ()
 sendUserTypingAction = do
-  st <- use id
-  when (configShowTypingIndicator (st^.csResources.crConfiguration)) $
-    case st^.csConnectionStatus of
-      Connected -> do
-        let pId = case st^.csEditState.cedEditMode of
-                    Replying _ post -> Just $ postId post
-                    _               -> Nothing
-        liftIO $ do
-          now <- getCurrentTime
-          let action = UserTyping now (st^.csCurrentChannelId) pId
-          STM.atomically $ STM.writeTChan (st^.csResources.crWebsocketActionChan) action
-      Disconnected -> return ()
+  cr <- use csCurrentChannelRef
+  case cr of
+      ServerChannel cId -> do
+          st <- use id
+          when (configShowTypingIndicator (st^.csResources.crConfiguration)) $
+            case st^.csConnectionStatus of
+              Connected -> do
+                let pId = case st^.csEditState.cedEditMode of
+                            Replying _ post -> Just $ postId post
+                            _               -> Nothing
+                liftIO $ do
+                  now <- getCurrentTime
+                  let action = UserTyping now cId pId
+                  STM.atomically $ STM.writeTChan (st^.csResources.crWebsocketActionChan) action
+              Disconnected -> return ()
 
 -- Kick off an async request to the spell checker for the current editor
 -- contents.
@@ -400,8 +405,8 @@ gotoEnd z =
 
 cancelAutocompleteOrReplyOrEdit :: MH ()
 cancelAutocompleteOrReplyOrEdit = do
-    cId <- use csCurrentChannelId
-    mh $ invalidateCacheEntry $ ChannelMessages cId
+    cr <- use csCurrentChannelRef
+    mh $ invalidateCacheEntry $ ChannelMessages cr
     ac <- use (csEditState.cedAutocomplete)
     case ac of
         Just _ -> do
@@ -422,8 +427,8 @@ replyToLatestMessage = do
     Just msg | isReplyable msg ->
         do let Just p = msg^.mOriginalPost
            setMode Main
-           cId <- use csCurrentChannelId
-           mh $ invalidateCacheEntry $ ChannelMessages cId
+           cr <- use csCurrentChannelRef
+           mh $ invalidateCacheEntry $ ChannelMessages cr
            csEditState.cedEditMode .= Replying msg p
     _ -> return ()
 

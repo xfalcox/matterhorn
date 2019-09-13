@@ -106,7 +106,9 @@ commandList =
 
   , Cmd "hide" "Hide the current DM or group channel from the channel list"
     NoArg $ \ () -> do
-      hideDMChannel =<< use csCurrentChannelId
+      cr <- use csCurrentChannelRef
+      case cr of
+          ServerChannel cId -> hideDMChannel cId
 
   , Cmd "reconnect" "Force a reconnection attempt to the server"
     NoArg $ \ () ->
@@ -153,7 +155,7 @@ commandList =
         withFetchedUserMaybe (UserFetchByUsername name) $ \foundUser -> do
             case foundUser of
                 Just user -> createOrFocusDMChannel user $ Just $ \cId ->
-                    handleInputSubmission cId msg
+                    handleInputSubmission (ServerChannel cId) msg
                 Nothing -> mhError $ NoSuchUser name
 
   , Cmd "log-start" "Begin logging to the specified path"
@@ -240,44 +242,46 @@ commandList =
 
 execMMCommand :: Text -> Text -> MH ()
 execMMCommand name rest = do
-  cId      <- use csCurrentChannelId
-  session  <- getSession
-  em       <- use (csEditState.cedEditMode)
-  tId      <- gets myTeamId
-  let mc = MM.MinCommand
-             { MM.minComChannelId = cId
-             , MM.minComCommand   = "/" <> name <> " " <> rest
-             , MM.minComParentId  = case em of
-                 Replying _ p -> Just $ MM.getId p
-                 Editing p _  -> MM.postRootId p
-                 _            -> Nothing
-             , MM.minComRootId  = case em of
-                 Replying _ p -> MM.postRootId p <|> (Just $ MM.postId p)
-                 Editing p _  -> MM.postRootId p
-                 _            -> Nothing
-             , MM.minComTeamId = tId
-             }
-      runCmd = liftIO $ do
-        void $ MM.mmExecuteCommand mc session
-      handleHTTP (MM.HTTPResponseException err) =
-        return (Just (T.pack err))
-        -- XXX: this might be a bit brittle in the future, because it
-        -- assumes the shape of an error message. We might want to
-        -- think about a better way of discovering this error and
-        -- reporting it accordingly?
-      handleCmdErr (MM.MattermostServerError err) =
-        let (_, msg) = T.breakOn ": " err in
-          return (Just (T.drop 2 msg))
-      handleMMErr (MM.MattermostError
-                     { MM.mattermostErrorMessage = msg }) =
-        return (Just msg)
-  errMsg <- liftIO $ (runCmd >> return Nothing) `Exn.catch` handleHTTP
-                                                `Exn.catch` handleCmdErr
-                                                `Exn.catch` handleMMErr
-  case errMsg of
-    Nothing -> return ()
-    Just err ->
-      mhError $ GenericError ("Error running command: " <> err)
+  cr <- use csCurrentChannelRef
+  case cr of
+      ServerChannel cId -> do
+          session  <- getSession
+          em       <- use (csEditState.cedEditMode)
+          tId      <- gets myTeamId
+          let mc = MM.MinCommand
+                     { MM.minComChannelId = cId
+                     , MM.minComCommand   = "/" <> name <> " " <> rest
+                     , MM.minComParentId  = case em of
+                         Replying _ p -> Just $ MM.getId p
+                         Editing p _  -> MM.postRootId p
+                         _            -> Nothing
+                     , MM.minComRootId  = case em of
+                         Replying _ p -> MM.postRootId p <|> (Just $ MM.postId p)
+                         Editing p _  -> MM.postRootId p
+                         _            -> Nothing
+                     , MM.minComTeamId = tId
+                     }
+              runCmd = liftIO $ do
+                void $ MM.mmExecuteCommand mc session
+              handleHTTP (MM.HTTPResponseException err) =
+                return (Just (T.pack err))
+                -- XXX: this might be a bit brittle in the future, because it
+                -- assumes the shape of an error message. We might want to
+                -- think about a better way of discovering this error and
+                -- reporting it accordingly?
+              handleCmdErr (MM.MattermostServerError err) =
+                let (_, msg) = T.breakOn ": " err in
+                  return (Just (T.drop 2 msg))
+              handleMMErr (MM.MattermostError
+                             { MM.mattermostErrorMessage = msg }) =
+                return (Just msg)
+          errMsg <- liftIO $ (runCmd >> return Nothing) `Exn.catch` handleHTTP
+                                                        `Exn.catch` handleCmdErr
+                                                        `Exn.catch` handleMMErr
+          case errMsg of
+            Nothing -> return ()
+            Just err ->
+              mhError $ GenericError ("Error running command: " <> err)
 
 dispatchCommand :: Text -> MH ()
 dispatchCommand cmd =

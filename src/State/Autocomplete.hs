@@ -156,8 +156,10 @@ doUserAutoCompletion ctx searchString = do
     session <- getSession
     myTid <- gets myTeamId
     myUid <- gets myUserId
-    cId <- use csCurrentChannelId
+    cr <- use csCurrentChannelRef
     let label = "Users"
+        cId = case cr of
+            ServerChannel i -> i
 
     withCachedAutocompleteResults ctx label searchString $
         doAsyncWith Preempt $ do

@@ -21,7 +21,7 @@ import           Data.Time.Clock ( UTCTime(..) )
 import qualified Graphics.Vty as Vty
 import           Lens.Micro.Platform ( (.~), (^?!), to, view, folding )
 
-import           Network.Mattermost.Types ( ChannelId, Type(Direct, Private, Group)
+import           Network.Mattermost.Types ( Type(Direct, Private, Group)
                                           , ServerTime(..), UserId
                                           )
 
@@ -332,7 +332,7 @@ renderCurrentChannelDisplay st hs = header <=> messages
         MessageSelectDeleteConfirm ->
             renderMessagesWithSelect (st^.csMessageSelect) channelMessages
         _ ->
-            cached (ChannelMessages cId) $
+            cached (ChannelMessages cr) $
             renderLastMessages st hs editCutoff $
             retrogradeMsgsWithThreadStates $
             reverseMessages channelMessages
@@ -359,20 +359,20 @@ renderCurrentChannelDisplay st hs = header <=> messages
              Just m ->
                  unsafeRenderMessageSelection (m, (before, after)) (renderSingleMessage st hs Nothing)
 
-    cutoff = getNewMessageCutoff cId st
-    editCutoff = getEditedMessageCutoff cId st
+    cutoff = getNewMessageCutoff cr st
+    editCutoff = getEditedMessageCutoff cr st
     channelMessages =
-        insertTransitions (getMessageListing cId st)
+        insertTransitions (getMessageListing cr st)
                           cutoff
                           (getDateFormat st)
                           (st ^. timeZone)
 
-    cId = st^.csCurrentChannelId
+    cr = st^.csCurrentChannelRef
     chan = st^.csCurrentChannel
 
-getMessageListing :: ChannelId -> ChatState -> Messages
-getMessageListing cId st =
-    st ^?! csChannels.folding (findChannelById cId) . ccContents . cdMessages . to (filterMessages isShown)
+getMessageListing :: ChanRef -> ChatState -> Messages
+getMessageListing cr st =
+    st ^?! csChannels.folding (findChannelByRef cr) . ccContents . cdMessages . to (filterMessages isShown)
     where isShown m
             | st^.csResources.crUserPreferences.userPrefShowJoinLeave = True
             | otherwise = not $ isJoinLeave m

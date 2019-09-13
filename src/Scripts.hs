@@ -42,13 +42,14 @@ runScript outputChan fp text = do
   runLoggedCommand True outputChan fp [] (Just $ T.unpack text) (Just outputVar)
   po <- takeMVar outputVar
   return $ case programExitCode po of
-    ExitSuccess -> do
-        case null $ programStderr po of
-            True -> Just $ do
-                mode <- use (csEditState.cedEditMode)
-                cId <- use csCurrentChannelId
-                sendMessage cId mode (T.pack $ programStdout po) []
-            False -> Nothing
+    ExitSuccess -> case null $ programStderr po of
+        True -> Just $ do
+            cr <- use csCurrentChannelRef
+            case cr of
+                ServerChannel cId -> do
+                    mode <- use (csEditState.cedEditMode)
+                    sendMessage cId mode (T.pack $ programStdout po) []
+        False -> Nothing
     ExitFailure _ -> Nothing
 
 listScripts :: MH ()
