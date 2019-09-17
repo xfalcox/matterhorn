@@ -54,6 +54,7 @@ module Types
   , RequestChan
   , UserFetch(..)
   , writeBChan
+  , getChanRefsFor
 
   , mkChannelZipperList
   , ChannelListGroup(..)
@@ -504,6 +505,18 @@ getDMChannelsInOrder now config cconfig prefs us cs =
         sorted = sortBy sorter allDmChans
         third (_, _, c) = c
     in third <$> sorted
+
+getChanRefsFor :: Post -> MH (ChanRef, [ChanRef])
+getChanRefsFor p = do
+    st <- use id
+    let cId = p^.postChannelIdL
+        mainChan = ServerChannel cId
+        matches (ConversationChannel _ rootId, _) = case postRootId p of
+            Nothing -> postId p == rootId
+            Just rId -> rId == rootId
+        matches _ = False
+        convChans = fst <$> filteredChannels matches (_csChannels st)
+    return (mainChan, convChans)
 
 useNickname' :: Maybe ClientConfig -> UserPreferences -> Bool
 useNickname' clientConfig prefs =

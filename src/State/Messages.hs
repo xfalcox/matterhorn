@@ -166,8 +166,19 @@ deleteMessage new = do
     mh $ invalidateCacheEntry (ChannelMessages cr)
 
 addNewPostedMessage :: PostToAdd -> MH ()
-addNewPostedMessage p =
-    addMessageToState True True p >>= postProcessMessageAdd
+addNewPostedMessage pa = do
+    let post = case pa of
+            OldPost p -> p
+            RecentPost p _ -> p
+
+    (mainChan, convChans) <- getChanRefsFor post
+
+    mhLog LogGeneral $ T.pack $ "addNewPostedMessage: " <> show (mainChan, convChans)
+
+    addMessageToState mainChan True True pa >>= postProcessMessageAdd
+
+    forM_ convChans $ \cr ->
+        addMessageToState cr False False pa >>= postProcessMessageAdd
 
 -- | Adds the set of Posts to the indicated channel.  The Posts must
 -- all be for the specified Channel.  The reqCnt argument indicates
@@ -295,7 +306,7 @@ addObtainedMessages cr reqCnt addTrailingGap posts =
         -- the post, and determining an notification action to be
         -- taken (if any).
         action <- foldr andProcessWith NoAction <$>
-          mapM (addMessageToState False False . OldPost)
+          mapM (addMessageToState cr False False . OldPost)
                    [ (posts^.postsPostsL) HM.! p
                    | p <- toList (posts^.postsOrderL)
                    , not (p `elem` dupPIds)
@@ -447,8 +458,8 @@ addObtainedMessages cr reqCnt addTrailingGap posts =
 -- or if ti is a new message and affects things like whether
 -- notifications are generated and if the "New Messages" marker gets
 -- updated.
-addMessageToState :: Bool -> Bool -> PostToAdd -> MH PostProcessMessageAdd
-addMessageToState doFetchMentionedUsers fetchAuthor newPostData = do
+addMessageToState :: ChanRef -> Bool -> Bool -> PostToAdd -> MH PostProcessMessageAdd
+addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
     let (new, wasMentioned) = case newPostData of
           -- A post from scrollback history has no mention data, and
           -- that's okay: we only need to track mentions to tell the
@@ -457,7 +468,6 @@ addMessageToState doFetchMentionedUsers fetchAuthor newPostData = do
           RecentPost p m -> (p, m)
 
     st <- use id
-    let cr = ServerChannel $ postChannelId new
     case st ^? csChannel(cr) of
         Nothing -> do
             session <- getSession
@@ -483,7 +493,7 @@ addMessageToState doFetchMentionedUsers fetchAuthor newPostData = do
                             then applyPreferenceChange pref
                             else refreshChannel SidebarUpdateImmediate nc member
 
-                        addMessageToState doFetchMentionedUsers fetchAuthor newPostData >>=
+                        addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData >>=
                             postProcessMessageAdd
 
             return NoAction
@@ -556,12 +566,11 @@ addMessageToState doFetchMentionedUsers fetchAuthor newPostData = do
                     doAddMessage
 
                 postedChanMessage =
-                  let newCr = ServerChannel $ postChannelId new
-                  in withChannelOrDefault newCr NoAction $ \chan -> do
+                  withChannelOrDefault cr NoAction $ \chan -> do
                       currCr <- use csCurrentChannelRef
 
                       let notifyPref = notifyPreference (myUser st) chan
-                          curChannelAction = if newCr == currCr
+                          curChannelAction = if cr == currCr
                                              then UpdateServerViewed
                                              else NoAction
                           originUserAction =
