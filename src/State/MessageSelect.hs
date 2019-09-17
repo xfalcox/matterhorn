@@ -72,7 +72,8 @@ followSelectedConversation = do
           case curCr of
               ServerChannel cId -> do
                   let cr = ConversationChannel cId rootPostId
-                      rootPostId = postId $ fromJust $ m^.mOriginalPost
+                      post = fromJust $ m^.mOriginalPost
+                      rootPostId = fromMaybe (postId post) (postRootId post)
                   cChannel <- makeConversationChannel curChan rootPostId
                   csChannels %= addChannel cr cChannel
                   updateSidebar
