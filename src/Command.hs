@@ -239,6 +239,9 @@ commandList =
   , Cmd "search" "Search for posts with given terms" (LineArg "terms") $
       enterSearchResultPostListMode
 
+  , Cmd "rename-conversation" "Change the name of a conversation topic channel" (LineArg "name") $
+      setConversationName
+
   ]
 
 parentPostIdForEditMode :: EditMode -> Maybe MM.PostId

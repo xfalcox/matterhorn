@@ -44,6 +44,7 @@ module State.Channels
   , beginCurrentChannelDeleteConfirm
   , toggleChannelListVisibility
   , showChannelInSidebar
+  , setConversationName
   )
 where
 
@@ -1040,3 +1041,14 @@ beginCurrentChannelDeleteConfirm = do
         if chType /= Direct
             then setMode DeleteChannelConfirm
             else mhError $ GenericError "Direct message channels cannot be deleted."
+
+setConversationName :: T.Text -> MH ()
+setConversationName name = do
+    cr <- use csCurrentChannelRef
+    let trimmed = T.strip name
+    when (not $ T.null trimmed) $
+        case cr of
+            ConversationChannel {} -> do
+                csChannel(cr).ccInfo.cdName .= trimmed
+                updateSidebar
+            _ -> return ()
