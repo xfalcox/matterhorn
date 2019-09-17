@@ -460,9 +460,11 @@ messageSelectBottomBar st =
             ConversationChannel i _ -> i
         isFollowable m = case m^.mOriginalPost of
             Nothing -> False
-            Just p -> case postRootId p of
-                Nothing -> not $ isFollowingConversation cId (postId p) (st^.csChannels)
-                Just rootId -> not $ isFollowingConversation cId rootId (st^.csChannels)
+            Just p ->
+                let pId = case postRootId p of
+                        Nothing -> postId p
+                        Just rootId -> rootId
+                in not $ isFollowingConversation cId pId (st^.csChannels)
         options = [ ( not . isGap
                     , ev YankWholeMessageEvent
                     , "yank-all"
