@@ -10,6 +10,7 @@ import           Prelude.MH
 import           Control.Concurrent ( takeMVar, newEmptyMVar )
 import qualified Control.Concurrent.STM as STM
 import qualified Data.Text as T
+import           Data.Maybe ( fromJust )
 import           System.Exit ( ExitCode(..) )
 
 import           FilePaths ( Script(..), getAllScripts, locateScriptPath )
@@ -45,10 +46,18 @@ runScript outputChan fp text = do
     ExitSuccess -> case null $ programStderr po of
         True -> Just $ do
             cr <- use csCurrentChannelRef
+            mode <- use (csEditState.cedEditMode)
             case cr of
-                ServerChannel cId -> do
-                    mode <- use (csEditState.cedEditMode)
+                ServerChannel cId ->
                     sendMessage cId mode (T.pack $ programStdout po) []
+                ConversationChannel cId pId -> do
+                    st <- use id
+                    let newMode = case mode of
+                            NewPost -> case getMessageForPostId st pId of
+                                Nothing -> mode
+                                Just msg -> Replying msg (fromJust $ msg^.mOriginalPost)
+                            _ -> mode
+                    sendMessage cId newMode (T.pack $ programStdout po) []
         False -> Nothing
     ExitFailure _ -> Nothing
 

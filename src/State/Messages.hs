@@ -33,6 +33,7 @@ import           Lens.Micro.Platform ( Traversal', (.=), (%=), (%~), (.~), (^?)
 
 import           Network.Mattermost
 import qualified Network.Mattermost.Endpoints as MM
+import qualified Network.Mattermost.Types as MM
 import           Network.Mattermost.Lenses
 import           Network.Mattermost.Types
 
@@ -695,6 +696,8 @@ asyncFetchMoreMessages :: MH ()
 asyncFetchMoreMessages = do
     cr <- use csCurrentChannelRef
     case cr of
+        ConversationChannel {} ->
+            return ()
         ServerChannel cId ->
            withChannel cr $ \chan ->
                let offset = max 0 $ length (chan^.ccContents.cdMessages) - 2
@@ -822,6 +825,18 @@ fetchVisibleIfNeeded = do
     when (sts == Connected) $ do
         cr <- use csCurrentChannelRef
         case cr of
+            ConversationChannel _ rootPostId -> do
+                csChannel(cr).ccContents.cdFetchPending .= True
+                session <- getSession
+                doAsyncWith Preempt $ do
+                    posts <- MM.mmGetThread rootPostId session
+                    -- TODO: having to make up a requested post count
+                    -- here is not great.
+                    return $ Just $ do
+                        mhLog LogGeneral $ T.pack $ "fetchVisibleIfNeeded: got thread, size = " <> show (HM.size $ MM.postsPosts posts)
+                        addObtainedMessages cr 1000 False posts >>= postProcessMessageAdd
+                        csChannel(cr).ccContents.cdFetchPending .= False
+                        mh $ invalidateCacheEntry (ChannelMessages cr)
             ServerChannel cId ->
                 withChannel cr $ \chan ->
                     let msgs = chan^.ccContents.cdMessages.to reverseMessages

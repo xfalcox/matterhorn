@@ -77,6 +77,7 @@ updateChannelSelectMatches = do
         matches e@(CLChannel cId) = findChannelById cId (st^.csChannels) >>= chanMatches e
         matches e@(CLUserDM _ uId) = userById uId st >>= userMatches e
         matches e@(CLGroupDM cId) = findChannelById cId (st^.csChannels) >>= groupChanMatches e
+        matches e@(CLConversation cId pId) = findChannelByRef (ConversationChannel cId pId) (st^.csChannels) >>= chanMatches e
 
         preserveFocus Nothing _ = False
         preserveFocus (Just m) m2 = matchEntry m == matchEntry m2

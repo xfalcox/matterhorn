@@ -129,6 +129,8 @@ mkChannelEntryData st e =
                             then u^.uiNickName.non (u^.uiName)
                             else u^.uiName
                 in (uname, Just $ T.singleton $ userSigilFromInfo u, True, Just $ u^.uiStatus)
+            CLConversation {} ->
+                ("<conv>", Just " ", True, Nothing)
         sigilWithSpace = sigil <> if addSpace then " " else ""
         prevEditSigil = "»"
         sigil = if current

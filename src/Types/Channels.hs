@@ -23,12 +23,13 @@ module Types.Channels
   -- * Lenses created for accessing ChannelInfo fields
   , cdViewed, cdNewMessageIndicator, cdEditedMessageThreshold, cdUpdated
   , cdName, cdHeader, cdPurpose, cdType
-  , cdMentionCount, cdTypingUsers, cdDMUserId, cdChannelId
+  , cdMentionCount, cdTypingUsers, cdDMUserId, cdChannelRef
   , cdSidebarShowOverride
   -- * Lenses created for accessing ChannelContents fields
   , cdMessages, cdFetchPending
   -- * Creating ClientChannel objects
   , makeClientChannel
+  , makeConversationChannel
   -- * Managing ClientChannel collections
   , noChannels, addChannel, removeChannel, findChannelByRef, findChannelById, modifyChannelById
   , modifyChannelByRef
@@ -73,7 +74,7 @@ import           Network.Mattermost.Lenses hiding ( Lens' )
 import           Network.Mattermost.Types ( Channel(..), UserId, ChannelId
                                           , ChannelMember(..)
                                           , Type(..)
-                                          , Post
+                                          , Post, PostId
                                           , User(userNotifyProps)
                                           , ChannelNotifyProps
                                           , NotifyOption(..)
@@ -142,7 +143,7 @@ data NewMessageIndicator =
 initialChannelInfo :: UserId -> Channel -> ChannelInfo
 initialChannelInfo myId chan =
     let updated  = chan ^. channelLastPostAtL
-    in ChannelInfo { _cdChannelId              = chan^.channelIdL
+    in ChannelInfo { _cdChannelRef             = ServerChannel $ chan^.channelIdL
                    , _cdViewed                 = Nothing
                    , _cdNewMessageIndicator    = Hide
                    , _cdEditedMessageThreshold = Nothing
@@ -158,6 +159,26 @@ initialChannelInfo myId chan =
                                                  then userIdForDMChannel myId $
                                                       sanitizeUserText $ channelName chan
                                                  else Nothing
+                   , _cdSidebarShowOverride    = Nothing
+                   }
+
+initialConversationChannelInfo :: ClientChannel -> PostId -> ChannelInfo
+initialConversationChannelInfo chan pId =
+    let cId = unServerChannel $ _cdChannelRef $ _ccInfo chan
+        updated = _cdUpdated $ _ccInfo chan
+    in ChannelInfo { _cdChannelRef             = ConversationChannel cId pId
+                   , _cdViewed                 = Nothing
+                   , _cdNewMessageIndicator    = Hide
+                   , _cdEditedMessageThreshold = Nothing
+                   , _cdMentionCount           = 0
+                   , _cdUpdated                = updated
+                   , _cdName                   = "Conversation topic"
+                   , _cdHeader                 = "Header"
+                   , _cdPurpose                = "Purpose"
+                   , _cdType                   = _cdType $ _ccInfo chan
+                   , _cdNotifyProps            = emptyChannelNotifyProps
+                   , _cdTypingUsers            = noTypingUsers
+                   , _cdDMUserId               = Nothing
                    , _cdSidebarShowOverride    = Nothing
                    }
 
@@ -200,11 +221,19 @@ emptyChannelContents = do
 
 ------------------------------------------------------------------------
 
+data ChanRef = ServerChannel ChannelId
+             | ConversationChannel ChannelId PostId
+             deriving (Eq, Ord, Show, Generic, Hashable, Read)
+
+unServerChannel :: ChanRef -> ChannelId
+unServerChannel (ServerChannel cId) = cId
+unServerChannel v = error $ "unServerChannel: expected ServerChannel, got " <> show v
+
 -- | The 'ChannelInfo' record represents metadata
 --   about a channel
 data ChannelInfo = ChannelInfo
-  { _cdChannelId        :: ChannelId
-    -- ^ The channel's ID
+  { _cdChannelRef       :: ChanRef
+    -- ^ The channel's reference
   , _cdViewed           :: Maybe ServerTime
     -- ^ The last time we looked at a channel
   , _cdNewMessageIndicator :: NewMessageIndicator
@@ -259,6 +288,14 @@ makeClientChannel myId nc = emptyChannelContents >>= \contents ->
   , _ccEditState = defaultEphemeralEditState
   }
 
+makeConversationChannel :: (MonadIO m) => ClientChannel -> PostId -> m ClientChannel
+makeConversationChannel chan pId = emptyChannelContents >>= \contents ->
+  return ClientChannel
+  { _ccContents = contents
+  , _ccInfo = initialConversationChannelInfo chan pId
+  , _ccEditState = defaultEphemeralEditState
+  }
+
 defaultEphemeralEditState :: EphemeralEditState
 defaultEphemeralEditState =
     EphemeralEditState { _eesMultiline = False
@@ -268,12 +305,6 @@ defaultEphemeralEditState =
 
 canLeaveChannel :: ChannelInfo -> Bool
 canLeaveChannel cInfo = not $ cInfo^.cdType `elem` [Direct]
-
-data ChanRef = ServerChannel ChannelId
-             deriving (Eq, Ord, Show, Generic, Hashable, Read)
-
-unServerChannel :: ChanRef -> ChannelId
-unServerChannel (ServerChannel cId) = cId
 
 -- ** Manage the collection of all Channels
 
@@ -309,6 +340,7 @@ addChannel cr cinfo =
         ServerChannel cId -> case cinfo^.ccInfo.cdDMUserId of
             Nothing -> id
             Just uId -> userChannelMap %~ HM.insert uId cId
+        ConversationChannel {} -> id
     )
 
 -- | Remove a channel from the collection.
@@ -322,6 +354,7 @@ removeChannel cr cs =
           & removeChannelName
           & userChannelMap %~ case cr of
               ServerChannel cId -> HM.filter (/= cId)
+              ConversationChannel {} -> id
 
 getDmChannelFor :: UserId -> ClientChannels -> Maybe ChannelId
 getDmChannelFor uId cs = cs^.userChannelMap.at uId

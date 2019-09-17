@@ -20,6 +20,7 @@ module State.MessageSelect
   , beginEditMessage
   , flagMessage
   , getSelectedMessage
+  , followSelectedConversation
   )
 where
 
@@ -28,6 +29,7 @@ import           Prelude.MH
 
 import           Brick.Widgets.Edit ( applyEdit )
 import           Data.Text.Zipper ( clearZipper, insertMany )
+import           Data.Maybe ( fromJust )
 import           Lens.Micro.Platform
 
 import qualified Network.Mattermost.Endpoints as MM
@@ -37,6 +39,7 @@ import           Clipboard ( copyToClipboard )
 import           Markdown ( findVerbatimChunk )
 import           State.Common
 import           State.Messages
+import           State.Channels
 import           Types
 import           Types.Common
 import           Windows.ViewMessage
@@ -57,6 +60,26 @@ getSelectedMessage st
         selMsgId <- selectMessageId $ st^.csMessageSelect
         let chanMsgs = st ^. csCurrentChannel . ccContents . cdMessages
         findMessage selMsgId chanMsgs
+
+followSelectedConversation :: MH ()
+followSelectedConversation = do
+  selected <- use (to getSelectedMessage)
+  case selected of
+      Nothing -> return ()
+      Just m -> do
+          curChan <- use csCurrentChannel
+          curCr <- use csCurrentChannelRef
+          case curCr of
+              ServerChannel cId -> do
+                  let cr = ConversationChannel cId rootPostId
+                      rootPostId = postId $ fromJust $ m^.mOriginalPost
+                  cChannel <- makeConversationChannel curChan rootPostId
+                  csChannels %= addChannel cr cChannel
+                  updateSidebar
+                  setFocus cr
+                  setMode Main
+              ConversationChannel {} ->
+                  return ()
 
 beginMessageSelect :: MH ()
 beginMessageSelect = do
@@ -97,6 +120,8 @@ fillSelectedGap :: MH ()
 fillSelectedGap = do
   cr <- use csCurrentChannelRef
   case cr of
+      ConversationChannel {} ->
+          return ()
       ServerChannel cId -> do
           selected <- use (to getSelectedMessage)
           case selected of
@@ -216,19 +241,20 @@ deleteSelectedMessage = do
     selectedMessage <- use (to getSelectedMessage)
     st <- use id
     cr <- use csCurrentChannelRef
-    case cr of
-        ServerChannel cId ->
-            case selectedMessage of
-                Just msg | isMine st msg && isDeletable msg ->
-                    case msg^.mOriginalPost of
-                      Just p ->
-                          doAsyncChannelMM Preempt cId
-                              (\s _ _ -> MM.mmDeletePost (postId p) s)
-                              (\_ _ -> Just $ do
-                                  csEditState.cedEditMode .= NewPost
-                                  setMode Main)
-                      Nothing -> return ()
-                _ -> return ()
+    let cId = case cr of
+            ConversationChannel i _ -> i
+            ServerChannel i -> i
+    case selectedMessage of
+        Just msg | isMine st msg && isDeletable msg ->
+            case msg^.mOriginalPost of
+              Just p ->
+                  doAsyncChannelMM Preempt cId
+                      (\s _ _ -> MM.mmDeletePost (postId p) s)
+                      (\_ _ -> Just $ do
+                          csEditState.cedEditMode .= NewPost
+                          setMode Main)
+              Nothing -> return ()
+        _ -> return ()
 
 beginReplyCompose :: MH ()
 beginReplyCompose = do

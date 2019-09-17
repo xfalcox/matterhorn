@@ -29,6 +29,7 @@ import qualified Control.Concurrent.STM as STM
 import qualified Data.ByteString as BS
 import           Data.Char ( isSpace )
 import qualified Data.Foldable as F
+import           Data.Maybe ( fromJust )
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -216,12 +217,23 @@ handleInputSubmission cr content = do
     case T.uncons content of
       Just ('/', cmd) ->
           dispatchCommand cmd
-      _ ->
-          case cr of
-              ServerChannel cId -> do
-                  attachments <- use (csEditState.cedAttachmentList.L.listElementsL)
-                  mode <- use (csEditState.cedEditMode)
-                  sendMessage cId mode content $ F.toList attachments
+      _ -> do
+          mode <- use (csEditState.cedEditMode)
+          st <- use id
+          (cId, newMode) <- case cr of
+              ServerChannel i ->
+                  return (i, mode)
+              ConversationChannel i pId -> do
+                  case getMessageForPostId st pId of
+                      Nothing ->
+                          return (i, mode)
+                      Just msg ->
+                          case mode of
+                              NewPost ->
+                                  return (i, Replying msg (fromJust $ msg^.mOriginalPost))
+                              _ -> return (i, mode)
+          attachments <- use (csEditState.cedAttachmentList.L.listElementsL)
+          sendMessage cId newMode content $ F.toList attachments
 
     -- Reset the autocomplete UI
     resetAutocomplete
@@ -323,20 +335,20 @@ handleEditingInput e = do
 sendUserTypingAction :: MH ()
 sendUserTypingAction = do
   cr <- use csCurrentChannelRef
-  case cr of
-      ServerChannel cId -> do
-          st <- use id
-          when (configShowTypingIndicator (st^.csResources.crConfiguration)) $
-            case st^.csConnectionStatus of
-              Connected -> do
-                let pId = case st^.csEditState.cedEditMode of
-                            Replying _ post -> Just $ postId post
-                            _               -> Nothing
-                liftIO $ do
-                  now <- getCurrentTime
-                  let action = UserTyping now cId pId
-                  STM.atomically $ STM.writeTChan (st^.csResources.crWebsocketActionChan) action
-              Disconnected -> return ()
+  st <- use id
+  when (configShowTypingIndicator (st^.csResources.crConfiguration)) $
+    case st^.csConnectionStatus of
+      Connected -> do
+        let (cId, pId) = case cr of
+                ServerChannel i -> case st^.csEditState.cedEditMode of
+                    Replying _ post -> (i, Just $ postId post)
+                    _               -> (i, Nothing)
+                ConversationChannel i p -> (i, Just p)
+        liftIO $ do
+          now <- getCurrentTime
+          let action = UserTyping now cId pId
+          STM.atomically $ STM.writeTChan (st^.csResources.crWebsocketActionChan) action
+      Disconnected -> return ()
 
 -- Kick off an async request to the spell checker for the current editor
 -- contents.

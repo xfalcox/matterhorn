@@ -52,6 +52,7 @@ data KeyEvent
   | EnterFlaggedPostsEvent
   | ToggleChannelListVisibleEvent
   | ShowAttachmentListEvent
+  | FollowConversationEvent
 
   | SelectNextTabEvent
   | SelectPreviousTabEvent
@@ -123,6 +124,7 @@ allEvents =
   , LastChannelEvent
 
   , ShowAttachmentListEvent
+  , FollowConversationEvent
 
   , EnterFlaggedPostsEvent
   , ToggleChannelListVisibleEvent
@@ -320,6 +322,7 @@ keyEventName ev = case ev of
   SelectPreviousTabEvent    -> "select-previous-tab"
 
   ShowAttachmentListEvent   -> "show-attachment-list"
+  FollowConversationEvent   -> "follow-conversation"
 
   EnterFlaggedPostsEvent    -> "show-flagged-posts"
   ToggleChannelListVisibleEvent -> "toggle-channel-list-visibility"

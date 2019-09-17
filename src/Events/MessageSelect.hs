@@ -49,6 +49,9 @@ messageSelectKeybindings = mkKeybindings
     , mkKb OpenMessageURLEvent "Open all URLs in the selected message"
         openSelectedMessageURLs
 
+    , mkKb FollowConversationEvent "Follow the conversation in a separate window"
+        followSelectedConversation
+
     , mkKb ReplyMessageEvent "Begin composing a reply to the selected message"
          beginReplyCompose
 

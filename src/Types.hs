@@ -339,6 +339,9 @@ data ChannelListEntry =
     -- ^ A single-user DM entry
     | CLGroupDM ChannelId
     -- ^ A multi-user DM entry
+    | CLConversation ChannelId PostId
+    -- ^ A "conversation" channel for the specified root post in the
+    -- specified channel
     deriving (Eq, Show)
 
 -- | This is how we represent the user's configuration. Most fields
@@ -474,8 +477,11 @@ mkChannelZipperList now config cconfig prefs cs us =
 getNonDMChannelIdsInOrder :: ClientChannels -> [ChannelListEntry]
 getNonDMChannelIdsInOrder cs =
     let matches (_, info) = info^.ccInfo.cdType `notElem` [Direct, Group]
-    in fmap (CLChannel . unServerChannel . fst) $
-       sortBy (comparing ((^.ccInfo.cdName) . snd)) $
+        mkEntry (ServerChannel cId) = CLChannel cId
+        mkEntry (ConversationChannel cId pId) = CLConversation cId pId
+        sorter = comparing ((^.ccInfo.cdName) . snd)
+    in fmap (mkEntry . fst) $
+       sortBy sorter $
        filteredChannels matches cs
 
 getDMChannelsInOrder :: UTCTime
@@ -578,12 +584,15 @@ groupChannelShouldAppear now config prefs c =
         updated = c^.ccInfo.cdUpdated
     in if hasUnread' c || maybe False (>= localCutoff) (c^.ccInfo.cdSidebarShowOverride)
        then True
-       else case groupChannelShowPreference prefs (c^.ccInfo.cdChannelId) of
-           Just False -> False
-           _ -> or [
-                   -- The channel was updated recently enough
-                     updated >= cutoff
-                   ]
+       else case c^.ccInfo.cdChannelRef of
+           ServerChannel cId ->
+               case groupChannelShowPreference prefs cId of
+               Just False -> False
+               _ -> or [
+                       -- The channel was updated recently enough
+                         updated >= cutoff
+                       ]
+           _ -> False
 
 dmChannelShowPreference :: UserPreferences -> UserId -> Maybe Bool
 dmChannelShowPreference ps uId = HM.lookup uId (_userPrefDirectChannelPrefs ps)
@@ -1275,7 +1284,7 @@ data ViewMessageWindowTab =
     deriving (Eq, Show)
 
 data PendingChannelChange =
-    ChangeByChannelId ChannelId
+    ChangeByChannelRef ChanRef
     | ChangeByUserId UserId
     deriving (Eq, Show)
 
@@ -1678,6 +1687,7 @@ channelListEntryChannelRef :: ChannelListEntry -> ChanRef
 channelListEntryChannelRef (CLChannel cId) = ServerChannel cId
 channelListEntryChannelRef (CLUserDM cId _) = ServerChannel cId
 channelListEntryChannelRef (CLGroupDM cId) = ServerChannel cId
+channelListEntryChannelRef (CLConversation cId pId) = ConversationChannel cId pId
 
 channelListEntryUserId :: ChannelListEntry -> Maybe UserId
 channelListEntryUserId (CLUserDM _ uId) = Just uId
@@ -1691,6 +1701,7 @@ entryIsDMEntry :: ChannelListEntry -> Bool
 entryIsDMEntry (CLUserDM {}) = True
 entryIsDMEntry (CLGroupDM {}) = True
 entryIsDMEntry (CLChannel {}) = False
+entryIsDMEntry (CLConversation {}) = False
 
 csCurrentChannel :: Lens' ChatState ClientChannel
 csCurrentChannel =

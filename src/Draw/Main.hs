@@ -472,6 +472,10 @@ messageSelectBottomBar st =
                     , ev FillGapEvent
                     , "load messages"
                     )
+                  , ( isPostMessage
+                    , ev FollowConversationEvent
+                    , "follow thread"
+                    )
                   , ( \m -> isMine st m && isEditable m
                     , ev EditMessageEvent
                     , "edit"

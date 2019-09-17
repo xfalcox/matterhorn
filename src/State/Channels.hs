@@ -119,6 +119,7 @@ updateViewed updatePrev = do
     cr <- use csCurrentChannelRef
     case cr of
         ServerChannel cId -> updateViewedChan updatePrev cId
+        ConversationChannel {} -> return ()
 
 -- | When a new channel has been selected for viewing, this will
 -- notify the server of the change, and also update the local channel
@@ -227,11 +228,13 @@ setLastViewedFor prevCr cr = do
           -- updating the client data, but it's also immune to any new
           -- or removed Message date fields, or anything else that would
           -- contribute to the viewed/updated times on the server.
-          case cr of
-              ServerChannel cId ->
-                  doAsyncChannelMM Preempt cId (\ s _ _ ->
-                                                   (,) <$> MM.mmGetChannel cId s
-                                                       <*> MM.mmGetChannelMember cId UserMe s)
+          let cId = case cr of
+                  ServerChannel i -> i
+                  ConversationChannel i _ -> i
+          in do
+              doAsyncChannelMM Preempt cId (\ s _ _ ->
+                                               (,) <$> MM.mmGetChannel cId s
+                                                   <*> MM.mmGetChannelMember cId UserMe s)
                   (\_ (ch, member) -> Just $ csChannel(cr).ccInfo %= channelInfoFromChannelWithData ch member)
 
     -- Update the old channel's previous viewed time (allows tracking of
@@ -397,7 +400,7 @@ handleNewChannel_ permitPostpone switch sbUpdate nc member = do
                     -- channel. Also consider the last join request
                     -- state field in case this is an asynchronous
                     -- channel addition triggered by a /join.
-                    pending1 <- checkPendingChannelChange (ChangeByChannelId $ getId nc)
+                    pending1 <- checkPendingChannelChange (ChangeByChannelRef cr)
                     pending2 <- case cChannel^.ccInfo.cdDMUserId of
                         Nothing -> return False
                         Just uId -> checkPendingChannelChange (ChangeByUserId uId)
@@ -466,7 +469,7 @@ showChannelInSidebar cr setPending = do
                         Just False -> do
                             let pref = showDirectChannelPref (me^.userIdL) uId True
                             when setPending $
-                                csPendingChannelChange .= Just (ChangeByChannelId $ ch^.ccInfo.cdChannelId)
+                                csPendingChannelChange .= Just (ChangeByChannelRef cr)
                             doAsyncWith Preempt $ do
                                 MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
                                 return Nothing
@@ -478,7 +481,7 @@ showChannelInSidebar cr setPending = do
                         Just False -> do
                             let pref = showGroupChannelPref cId (me^.userIdL)
                             when setPending $
-                                csPendingChannelChange .= Just (ChangeByChannelId $ ch^.ccInfo.cdChannelId)
+                                csPendingChannelChange .= Just (ChangeByChannelRef cr)
                             doAsyncWith Preempt $ do
                                 MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
                                 return Nothing
@@ -629,7 +632,7 @@ applyPreferenceChange pref = do
               cr = ServerChannel cId
           case directChannelShowValue d of
               True -> do
-                  pending <- checkPendingChannelChange $ ChangeByChannelId cId
+                  pending <- checkPendingChannelChange $ ChangeByChannelRef cr
                   when pending $ setFocus cr
               False -> do
                   csChannel(ServerChannel cId).ccInfo.cdSidebarShowOverride .= Nothing
@@ -645,7 +648,7 @@ applyPreferenceChange pref = do
               cId = groupChannelId g
           case groupChannelShow g of
               True -> do
-                  pending <- checkPendingChannelChange $ ChangeByChannelId cId
+                  pending <- checkPendingChannelChange $ ChangeByChannelRef cr
                   when pending $ setFocus cr
               False -> do
                   csChannel(cr).ccInfo.cdSidebarShowOverride .= Nothing
@@ -707,6 +710,8 @@ leaveChannel :: ChanRef -> MH ()
 leaveChannel cr = leaveChannelIfPossible cr False
 
 leaveChannelIfPossible :: ChanRef -> Bool -> MH ()
+leaveChannelIfPossible cr@(ConversationChannel {}) _ = do
+    removeChannelFromState cr
 leaveChannelIfPossible cr@(ServerChannel cId) delete = do
     st <- use id
     me <- gets myUser
@@ -798,14 +803,15 @@ createGroupChannel usernameList = do
             True -> do
                 chan <- MM.mmCreateGroupMessageChannel (userId <$> results) session
                 return $ Just $ do
+                    let cr = ServerChannel $ channelId chan
                     case findChannelById (channelId chan) cs of
                       Just _ ->
                           -- If we already know about the channel ID,
                           -- that means the channel already exists so
                           -- we can just switch to it.
-                          setFocus (ServerChannel $ channelId chan)
+                          setFocus cr
                       Nothing -> do
-                          csPendingChannelChange .= (Just $ ChangeByChannelId $ channelId chan)
+                          csPendingChannelChange .= (Just $ ChangeByChannelRef cr)
                           let pref = showGroupChannelPref (channelId chan) (me^.userIdL)
                           doAsyncWith Normal $ do
                             MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
@@ -885,7 +891,7 @@ handleChannelInvite cId = do
         member <- MM.mmGetChannelMember cId UserMe session
         tryMM (MM.mmGetChannel cId session)
               (\cwd -> return $ Just $ do
-                  pending <- checkPendingChannelChange $ ChangeByChannelId cId
+                  pending <- checkPendingChannelChange $ ChangeByChannelRef $ ServerChannel cId
                   handleNewChannel pending SidebarUpdateImmediate cwd member)
 
 addUserByNameToCurrentChannel :: Text -> MH ()
@@ -902,6 +908,8 @@ addUserToCurrentChannel u = do
             doAsyncWith Normal $ do
                 tryMM (void $ MM.mmAddUser cId channelMember session)
                       (const $ return Nothing)
+        ConversationChannel {} ->
+            return ()
 
 removeUserFromCurrentChannel :: Text -> MH ()
 removeUserFromCurrentChannel uname =
@@ -913,6 +921,8 @@ removeUserFromCurrentChannel uname =
                 doAsyncWith Normal $ do
                     tryMM (void $ MM.mmRemoveUserFromChannel cId (UserById $ u^.uiId) session)
                           (const $ return Nothing)
+            ConversationChannel {} ->
+                return ()
 
 startLeaveCurrentChannel :: MH ()
 startLeaveCurrentChannel = do
@@ -955,7 +965,7 @@ joinChannel chanId = do
         Nothing -> do
             myId <- gets myUserId
             let member = MinChannelMember myId chanId
-            csPendingChannelChange .= (Just $ ChangeByChannelId chanId)
+            csPendingChannelChange .= (Just $ ChangeByChannelRef cr)
             doAsyncChannelMM Preempt chanId (\ s _ c -> MM.mmAddUser c member s) endAsyncNOP
 
 createOrFocusDMChannel :: UserInfo -> Maybe (ChannelId -> MH ()) -> MH ()
@@ -1019,6 +1029,8 @@ setChannelTopic msg = do
             doAsyncChannelMM Preempt cId
                 (\s _ _ -> MM.mmPatchChannel cId patch s)
                 (\_ _ -> Nothing)
+        ConversationChannel {} ->
+            return ()
 
 beginCurrentChannelDeleteConfirm :: MH ()
 beginCurrentChannelDeleteConfirm = do

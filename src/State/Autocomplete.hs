@@ -160,6 +160,7 @@ doUserAutoCompletion ctx searchString = do
     let label = "Users"
         cId = case cr of
             ServerChannel i -> i
+            ConversationChannel i _ -> i
 
     withCachedAutocompleteResults ctx label searchString $
         doAsyncWith Preempt $ do
