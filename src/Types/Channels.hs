@@ -55,6 +55,7 @@ module Types.Channels
   , channelDeleted
   , getDmChannelFor
   , getConversations
+  , isFollowingConversation
   , allDmChannelMappings
   , getChannelNameSet
   , isServerChannel
@@ -377,6 +378,10 @@ getDmChannelFor uId cs = cs^.userChannelMap.at uId
 
 getConversations :: ChannelId -> ClientChannels -> [PostId]
 getConversations cId cs = maybe [] S.toList $ cs^.followedThreads.at cId
+
+isFollowingConversation :: ChannelId -> PostId -> ClientChannels -> Bool
+isFollowingConversation cId pId cs =
+    maybe False (S.member pId) (cs^.followedThreads.at cId)
 
 allDmChannelMappings :: ClientChannels -> [(UserId, ChannelId)]
 allDmChannelMappings = HM.toList . _userChannelMap

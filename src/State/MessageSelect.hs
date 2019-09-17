@@ -71,13 +71,17 @@ followSelectedConversation = do
           curCr <- use csCurrentChannelRef
           case curCr of
               ServerChannel cId -> do
-                  let cr = ConversationChannel cId rootPostId
+                  let rootPostId = fromMaybe (postId post) (postRootId post)
                       post = fromJust $ m^.mOriginalPost
-                      rootPostId = fromMaybe (postId post) (postRootId post)
-                  cChannel <- makeConversationChannel curChan rootPostId
-                  csChannels %= addChannel cr cChannel
-                  updateSidebar
-                  setFocus cr
+                  cs <- use csChannels
+
+                  when (not $ isFollowingConversation cId rootPostId cs) $ do
+                      let cr = ConversationChannel cId rootPostId
+                      cChannel <- makeConversationChannel curChan rootPostId
+                      csChannels %= addChannel cr cChannel
+                      updateSidebar
+                      setFocus cr
+
                   setMode Main
               ConversationChannel {} ->
                   return ()
