@@ -520,7 +520,7 @@ addMessageToState doFetchMentionedUsers fetchAuthor newPostData = do
                     csPostMap.at(postId new) .= Just msg'
 
                     mh $ invalidateCacheEntry $ ChannelMessages cr
-                    csChannels %= modifyChannelById cId
+                    csChannels %= modifyChannelByRef cr
                       ((ccContents.cdMessages %~ addMessage msg') .
                        (adjustUpdated new) .
                        (\c -> if currCr == cr
