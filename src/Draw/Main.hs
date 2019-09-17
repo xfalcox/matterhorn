@@ -22,7 +22,7 @@ import qualified Graphics.Vty as Vty
 import           Lens.Micro.Platform ( (.~), (^?!), to, view, folding )
 
 import           Network.Mattermost.Types ( Type(Direct, Private, Group)
-                                          , ServerTime(..), UserId
+                                          , ServerTime(..), UserId, postRootId, postId
                                           )
 
 
@@ -454,6 +454,15 @@ messageSelectBottomBar st =
                     } <- keymap
                , e' == e
                ]
+        cr = st^.csCurrentChannelRef
+        cId = case cr of
+            ServerChannel i -> i
+            ConversationChannel i _ -> i
+        isFollowable m = case m^.mOriginalPost of
+            Nothing -> False
+            Just p -> case postRootId p of
+                Nothing -> not $ isFollowingConversation cId (postId p) (st^.csChannels)
+                Just rootId -> not $ isFollowingConversation cId rootId (st^.csChannels)
         options = [ ( not . isGap
                     , ev YankWholeMessageEvent
                     , "yank-all"
@@ -478,7 +487,7 @@ messageSelectBottomBar st =
                     , ev FillGapEvent
                     , "load messages"
                     )
-                  , ( isPostMessage
+                  , ( isFollowable
                     , ev FollowConversationEvent
                     , "follow thread"
                     )
