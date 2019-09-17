@@ -316,6 +316,10 @@ renderChannelHeader st hs chan =
          hs
          (T.map newlineToSpace (channelNameString <> maybeTopic))
 
+shouldShowThreads :: ChanRef -> Bool
+shouldShowThreads (ConversationChannel {}) = False
+shouldShowThreads (ServerChannel {}) = True
+
 renderCurrentChannelDisplay :: ChatState -> HighlightSet -> Widget Name
 renderCurrentChannelDisplay st hs = header <=> messages
     where
@@ -334,7 +338,7 @@ renderCurrentChannelDisplay st hs = header <=> messages
         _ ->
             cached (ChannelMessages cr) $
             renderLastMessages st hs editCutoff $
-            retrogradeMsgsWithThreadStates $
+            (if shouldShowThreads cr then retrogradeMsgsWithThreadStates else nullThreadStates) $
             reverseMessages channelMessages
 
     renderMessagesWithSelect (MessageSelectState selMsgId) msgs =
@@ -352,7 +356,9 @@ renderCurrentChannelDisplay st hs = header <=> messages
         -- some conditions, the selected message might be gone (e.g.
         -- deleted).
         let (s, (before, after)) = splitDirSeqOn (\(m, _) -> m^.mMessageId == selMsgId) msgsWithStates
-            msgsWithStates = chronologicalMsgsWithThreadStates msgs
+            msgsWithStates = if shouldShowThreads cr
+                             then chronologicalMsgsWithThreadStates msgs
+                             else nullThreadStates msgs
         in case s of
              Nothing ->
                  renderLastMessages st hs editCutoff before

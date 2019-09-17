@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 {-|
 
@@ -74,6 +75,7 @@ module Types.Messages
   , splitDirSeqOn
   , chronologicalMsgsWithThreadStates
   , retrogradeMsgsWithThreadStates
+  , nullThreadStates
   , findMessage
   , getRelMessageId
   , messagesHead
@@ -491,6 +493,9 @@ threadStateFor msg prev = case msg^.mInReplyToMsg of
            | otherwise ->
                InThreadShowParent
     _ -> NoThread
+
+nullThreadStates :: DirectionalSeq seq Message -> DirectionalSeq seq (Message, ThreadState)
+nullThreadStates msgs = DSeq $ (, NoThread) <$> dseq msgs
 
 retrogradeMsgsWithThreadStates :: RetrogradeMessages -> DirectionalSeq Retrograde (Message, ThreadState)
 retrogradeMsgsWithThreadStates msgs = DSeq $ checkAdjacentMessages (dseq msgs)
