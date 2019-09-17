@@ -122,7 +122,7 @@ mkChannelEntryData st e =
                         _           -> (Nothing, False)
                 in (chan^.ccInfo.cdName, useSigil, space, Nothing)
             CLGroupDM _ ->
-                (chan^.ccInfo.cdName, Just " ", True, Nothing)
+                (chan^.ccInfo.cdName, Nothing, True, Nothing)
             CLUserDM _ uId ->
                 let Just u = userById uId st
                     uname = if useNickname st
