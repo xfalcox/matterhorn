@@ -57,6 +57,7 @@ module Types.Channels
   , getConversations
   , allDmChannelMappings
   , getChannelNameSet
+  , isServerChannel
   )
 where
 
@@ -230,6 +231,10 @@ data ChanRef = ServerChannel ChannelId
 unServerChannel :: ChanRef -> ChannelId
 unServerChannel (ServerChannel cId) = cId
 unServerChannel v = error $ "unServerChannel: expected ServerChannel, got " <> show v
+
+isServerChannel :: ChanRef -> Bool
+isServerChannel (ServerChannel {}) = True
+isServerChannel _ = False
 
 -- | The 'ChannelInfo' record represents metadata
 --   about a channel

@@ -276,6 +276,7 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Exception ( SomeException )
 import qualified Control.Monad.State as St
 import qualified Control.Monad.Reader as R
+import           Data.Maybe ( fromJust )
 import qualified Data.Set as Set
 import qualified Data.ByteString as BS
 import qualified Data.Foldable as F
@@ -477,13 +478,23 @@ mkChannelZipperList now config cconfig prefs cs us =
 
 getNonDMChannelIdsInOrder :: ClientChannels -> [ChannelListEntry]
 getNonDMChannelIdsInOrder cs =
-    let matches (_, info) = info^.ccInfo.cdType `notElem` [Direct, Group]
-        mkEntry (ServerChannel cId) = CLChannel cId
-        mkEntry (ConversationChannel cId pId) = CLConversation cId pId
+    let matches (cr, info) = info^.ccInfo.cdType `notElem` [Direct, Group] &&
+                             isServerChannel cr
+        mkEntry (ServerChannel cId) = CLChannel cId : getConversationChannelEntriesFor cId cs
+        mkEntry _ = error "BUG: getNonDMChannelIdsInOrder should not get a non-ServerChannel"
         sorter = comparing ((^.ccInfo.cdName) . snd)
-    in fmap (mkEntry . fst) $
+    in concat $
+       fmap (mkEntry . fst) $
        sortBy sorter $
        filteredChannels matches cs
+
+getConversationChannelEntriesFor :: ChannelId -> ClientChannels -> [ChannelListEntry]
+getConversationChannelEntriesFor cId cs =
+    let convs = getConversations cId cs
+        mkEntry (pId, _) = CLConversation cId pId
+        sorter = comparing ((^.ccInfo.cdName) . snd)
+        getChannel pId = (pId, fromJust $ findChannelByRef (ConversationChannel cId pId) cs)
+    in mkEntry <$> (sortBy sorter $ getChannel <$> convs)
 
 getDMChannelsInOrder :: UTCTime
                      -> Config
