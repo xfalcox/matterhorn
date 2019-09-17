@@ -26,6 +26,8 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
+import           Data.List ( sortBy )
+import           Data.Ord ( comparing )
 import           Graphics.Vty ( outputIface )
 import           Graphics.Vty.Output.Interface ( ringTerminalBell )
 import           Lens.Micro.Platform ( Traversal', (.=), (%=), (%~), (.~), (^?)
@@ -839,11 +841,22 @@ fetchVisibleIfNeeded = do
                 session <- getSession
                 doAsyncWith Preempt $ do
                     posts <- MM.mmGetThread rootPostId session
+                    -- Build a post order sequence from the thread
+                    -- posts, sorted by creation time. We do this
+                    -- because the server returns an ordering
+                    -- that only includes the root post, but our
+                    -- addObtainedMessages function relies on the
+                    -- ordering to add the messages.
+                    --
                     -- TODO: having to make up a requested post count
                     -- here is not great.
+                    let newOrder = Seq.fromList $ fst <$>
+                                   sortBy (comparing (postCreateAt . snd))
+                                       (HM.toList (postsPosts posts))
+                        newPosts = posts { postsOrder = newOrder }
                     return $ Just $ do
                         mhLog LogGeneral $ T.pack $ "fetchVisibleIfNeeded: got thread, size = " <> show (HM.size $ MM.postsPosts posts)
-                        addObtainedMessages cr 1000 False posts >>= postProcessMessageAdd
+                        addObtainedMessages cr 1000 False newPosts >>= postProcessMessageAdd
                         csChannel(cr).ccContents.cdFetchPending .= False
                         mh $ invalidateCacheEntry (ChannelMessages cr)
             ServerChannel cId ->
