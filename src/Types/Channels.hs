@@ -18,6 +18,7 @@ module Types.Channels
   , unServerChannel
   , eesMultiline, eesInputHistoryPosition, eesLastInput
   , defaultEphemeralEditState
+  , followedThreads
   -- * Lenses created for accessing ClientChannel fields
   , ccContents, ccInfo, ccEditState
   -- * Lenses created for accessing ChannelInfo fields
@@ -53,6 +54,7 @@ module Types.Channels
   , isTownSquare
   , channelDeleted
   , getDmChannelFor
+  , getConversations
   , allDmChannelMappings
   , getChannelNameSet
   )
@@ -68,7 +70,7 @@ import qualified Data.Text as T
 import           GHC.Generics ( Generic )
 import           Lens.Micro.Platform ( (%~), (.~), Traversal', Lens'
                                      , makeLenses, ix, at
-                                     , to, non )
+                                     , to, non, _Just )
 
 import           Network.Mattermost.Lenses hiding ( Lens' )
 import           Network.Mattermost.Types ( Channel(..), UserId, ChannelId
@@ -311,6 +313,7 @@ canLeaveChannel cInfo = not $ cInfo^.cdType `elem` [Direct]
 -- | Define a binary kinded type to allow derivation of functor.
 data AllMyChannels a =
     AllChannels { _chanMap :: HashMap ChanRef a
+                , _followedThreads :: HashMap ChannelId (S.Set PostId)
                 , _userChannelMap :: HashMap UserId ChannelId
                 , _channelNameSet :: S.Set Text
                 }
@@ -327,7 +330,7 @@ getChannelNameSet = _channelNameSet
 
 -- | Initial collection of Channels with no members
 noChannels :: ClientChannels
-noChannels = AllChannels HM.empty HM.empty mempty
+noChannels = AllChannels HM.empty HM.empty HM.empty mempty
 
 -- | Add a channel to the existing collection.
 addChannel :: ChanRef -> ClientChannel -> ClientChannels -> ClientChannels
@@ -340,7 +343,12 @@ addChannel cr cinfo =
         ServerChannel cId -> case cinfo^.ccInfo.cdDMUserId of
             Nothing -> id
             Just uId -> userChannelMap %~ HM.insert uId cId
-        ConversationChannel {} -> id
+        ConversationChannel cId pId ->
+            followedThreads %~ (flip HM.alter cId $ \ms ->
+                case ms of
+                    Nothing -> Just $ S.fromList [pId]
+                    Just s -> Just $ S.insert pId s
+            )
     )
 
 -- | Remove a channel from the collection.
@@ -355,9 +363,15 @@ removeChannel cr cs =
           & userChannelMap %~ case cr of
               ServerChannel cId -> HM.filter (/= cId)
               ConversationChannel {} -> id
+          & case cr of
+              ServerChannel cId -> followedThreads %~ HM.delete cId
+              ConversationChannel cId pId -> followedThreads.at cId._Just %~ S.delete pId
 
 getDmChannelFor :: UserId -> ClientChannels -> Maybe ChannelId
 getDmChannelFor uId cs = cs^.userChannelMap.at uId
+
+getConversations :: ChannelId -> ClientChannels -> [PostId]
+getConversations cId cs = maybe [] S.toList $ cs^.followedThreads.at cId
 
 allDmChannelMappings :: ClientChannels -> [(UserId, ChannelId)]
 allDmChannelMappings = HM.toList . _userChannelMap

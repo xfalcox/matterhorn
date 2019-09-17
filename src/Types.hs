@@ -510,13 +510,13 @@ getChanRefsFor :: Post -> MH (ChanRef, [ChanRef])
 getChanRefsFor p = do
     st <- use id
     let cId = p^.postChannelIdL
-        mainChan = ServerChannel cId
-        matches (ConversationChannel _ rootId, _) = case postRootId p of
-            Nothing -> postId p == rootId
-            Just rId -> rId == rootId
-        matches _ = False
-        convChans = fst <$> filteredChannels matches (_csChannels st)
-    return (mainChan, convChans)
+        convs = getConversations cId (_csChannels st)
+        cr = ServerChannel cId
+    case postRootId p of
+        Nothing -> return (cr, [])
+        Just rootId -> if rootId `elem` convs
+                       then return (cr, [ConversationChannel cId rootId])
+                       else return (cr, [])
 
 useNickname' :: Maybe ClientConfig -> UserPreferences -> Bool
 useNickname' clientConfig prefs =
