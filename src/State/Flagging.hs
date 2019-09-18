@@ -31,8 +31,8 @@ loadFlaggedMessages prefs st = doAsyncWithIO Normal st $ do
 -- rather is the function we call when the Mattermost server notifies
 -- us of flagged or unflagged messages.
 updateMessageFlag :: PostId -> Bool -> MH ()
-updateMessageFlag pId f = do
-  if f
+updateMessageFlag pId becameFlagged = do
+  if becameFlagged
     then csResources.crFlaggedPosts %= Set.insert pId
     else csResources.crFlaggedPosts %= Set.delete pId
   msgMb <- use (csPostMap.at(pId))
@@ -41,14 +41,14 @@ updateMessageFlag pId f = do
       | Just cId <- msg^.mChannelId -> do
       let isTargetMessage m = m^.mMessageId == Just (MessagePostId pId)
           cr = ServerChannel cId
-      csChannel(cr).ccContents.cdMessages.traversed.filtered isTargetMessage.mFlagged .= f
-      csPostMap.ix(pId).mFlagged .= f
+      csChannel(cr).ccContents.cdMessages.traversed.filtered isTargetMessage.mFlagged .= becameFlagged
+      csPostMap.ix(pId).mFlagged .= becameFlagged
       -- We also want to update the post overlay if this happens while
       -- we're we're observing it
       mode <- gets appMode
       case mode of
         PostListOverlay PostListFlagged
-          | f ->
+          | becameFlagged ->
               csPostListOverlay.postListPosts %=
                 addMessage (msg & mFlagged .~ True)
           -- deleting here is tricky, because it means that we need to
