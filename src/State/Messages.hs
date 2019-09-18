@@ -897,8 +897,7 @@ fetchVisibleIfNeeded = do
 
 asyncFetchAttachments :: Post -> MH ()
 asyncFetchAttachments p = do
-    let cId = p^.postChannelIdL
-        pId = p^.postIdL
+    let pId = p^.postIdL
     session <- getSession
     host <- use (csResources.crConn.cdHostnameL)
     F.forM_ (p^.postFileIdsL) $ \fId -> doAsyncWith Normal $ do
@@ -916,6 +915,7 @@ asyncFetchAttachments p = do
                 | otherwise =
                     m
         return $ Just $ do
-            let cr = ServerChannel cId
-            csChannel(cr).ccContents.cdMessages.traversed %= addAttachment
-            mh $ invalidateCacheEntry $ ChannelMessages cr
+            (mainRef, otherRefs) <- getChanRefsFor p
+            forM_ (mainRef:otherRefs) $ \cr -> do
+                csChannel(cr).ccContents.cdMessages.traversed %= addAttachment
+                mh $ invalidateCacheEntry $ ChannelMessages cr
