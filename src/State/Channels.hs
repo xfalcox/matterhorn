@@ -118,7 +118,7 @@ updateViewed :: Bool -> MH ()
 updateViewed updatePrev = do
     csCurrentChannel.ccInfo.cdMentionCount .= 0
     cr <- use csCurrentChannelRef
-    withServerChannel $ updateViewedChan updatePrev
+    withServerChannel cr $ updateViewedChan updatePrev
 
 -- | When a new channel has been selected for viewing, this will
 -- notify the server of the change, and also update the local channel
@@ -900,7 +900,7 @@ addUserByNameToCurrentChannel uname =
 addUserToCurrentChannel :: UserInfo -> MH ()
 addUserToCurrentChannel u = do
     cr <- use csCurrentChannelRef
-    withServerChannel $ \cId -> do
+    withServerChannel cr $ \cId -> do
         session <- getSession
         let channelMember = MinChannelMember (u^.uiId) cId
         doAsyncWith Normal $ do
@@ -911,7 +911,7 @@ removeUserFromCurrentChannel :: Text -> MH ()
 removeUserFromCurrentChannel uname =
     withFetchedUser (UserFetchByUsername uname) $ \u -> do
         cr <- use csCurrentChannelRef
-        withServerChannel $ \cId -> do
+        withServerChannel cr $ \cId -> do
             session <- getSession
             doAsyncWith Normal $ do
                 tryMM (void $ MM.mmRemoveUserFromChannel cId (UserById $ u^.uiId) session)
@@ -1016,7 +1016,7 @@ changeChannelByName name = do
 setChannelTopic :: Text -> MH ()
 setChannelTopic msg = do
     cr <- use csCurrentChannelRef
-    withServerChannel $ \cId -> do
+    withServerChannel cr $ \cId -> do
         let patch = defaultChannelPatch { channelPatchHeader = Just msg }
         doAsyncChannelMM Preempt cId
             (\s _ _ -> MM.mmPatchChannel cId patch s)
@@ -1035,7 +1035,7 @@ setConversationName :: T.Text -> MH ()
 setConversationName name = do
     cr <- use csCurrentChannelRef
     let trimmed = T.strip name
-    when (not $ T.null trimmed) $
-        withConversationChannel $ \_ _ -> do
+    when (not $ T.null trimmed) $ do
+        withConversationChannel cr $ \_ _ -> do
             csChannel(cr).ccInfo.cdName .= trimmed
             updateSidebar

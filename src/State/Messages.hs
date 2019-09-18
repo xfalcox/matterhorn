@@ -707,7 +707,7 @@ maybePostUsername st p =
 asyncFetchMoreMessages :: MH ()
 asyncFetchMoreMessages = do
     cr <- use csCurrentChannelRef
-    withServerChannel $ \cId ->
+    withServerChannel cr $ \cId ->
        withChannel cr $ \chan ->
            let offset = max 0 $ length (chan^.ccContents.cdMessages) - 2
                page = offset `div` pageAmount
