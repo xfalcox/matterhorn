@@ -7,6 +7,7 @@ where
 import           Prelude ()
 import           Prelude.MH
 
+import           Brick ( invalidateCacheEntry )
 import           Data.Function ( on )
 import qualified Data.Set as Set
 import           Lens.Micro.Platform
@@ -38,30 +39,44 @@ updateMessageFlag pId becameFlagged = do
   msgMb <- use (csPostMap.at(pId))
   case msgMb of
     Just msg
-      | Just cId <- msg^.mChannelId -> do
-      let isTargetMessage m = m^.mMessageId == Just (MessagePostId pId)
-          cr = ServerChannel cId
-      csChannel(cr).ccContents.cdMessages.traversed.filtered isTargetMessage.mFlagged .= becameFlagged
-      csPostMap.ix(pId).mFlagged .= becameFlagged
-      -- We also want to update the post overlay if this happens while
-      -- we're we're observing it
-      mode <- gets appMode
-      case mode of
-        PostListOverlay PostListFlagged
-          | becameFlagged ->
-              csPostListOverlay.postListPosts %=
-                addMessage (msg & mFlagged .~ True)
-          -- deleting here is tricky, because it means that we need to
-          -- move the focus somewhere: we'll try moving it _up_ unless
-          -- we can't, in which case we'll try moving it down.
-          | otherwise -> do
-              selId <- use (csPostListOverlay.postListSelected)
-              posts <- use (csPostListOverlay.postListPosts)
-              let nextId = case getNextPostId selId posts of
-                    Nothing -> getPrevPostId selId posts
-                    Just x  -> Just x
-              csPostListOverlay.postListSelected .= nextId
-              csPostListOverlay.postListPosts %=
-                filterMessages (((/=) `on` _mMessageId) msg)
-        _ -> return ()
+      | Just post <- msg^.mOriginalPost -> do
+          (mainRef, otherRefs) <- getChanRefsFor post
+
+          updateMessageFlagInChannel mainRef pId becameFlagged
+          forM_ otherRefs $ \r ->
+              updateMessageFlagInChannel r pId becameFlagged
+
+          updateMessageFlagInPostOverlay msg becameFlagged
     _ -> return ()
+
+updateMessageFlagInChannel :: ChanRef -> PostId -> Bool -> MH ()
+updateMessageFlagInChannel cr pId becameFlagged = do
+    let isTargetMessage m = m^.mMessageId == Just (MessagePostId pId)
+    csChannel(cr).ccContents.cdMessages.traversed.filtered isTargetMessage.mFlagged .= becameFlagged
+    csPostMap.ix(pId).mFlagged .= becameFlagged
+    mh $ invalidateCacheEntry (ChannelMessages cr)
+
+updateMessageFlagInPostOverlay :: Message -> Bool -> MH ()
+updateMessageFlagInPostOverlay msg becameFlagged = do
+    -- We also want to update the post overlay if this happens while
+    -- we're we're observing it
+    mode <- gets appMode
+    case mode of
+        PostListOverlay PostListFlagged
+            | becameFlagged ->
+                csPostListOverlay.postListPosts %=
+                  addMessage (msg & mFlagged .~ True)
+
+            -- deleting here is tricky, because it means that we need to
+            -- move the focus somewhere: we'll try moving it _up_ unless
+            -- we can't, in which case we'll try moving it down.
+            | otherwise -> do
+                selId <- use (csPostListOverlay.postListSelected)
+                posts <- use (csPostListOverlay.postListPosts)
+                let nextId = case getNextPostId selId posts of
+                      Nothing -> getPrevPostId selId posts
+                      Just x  -> Just x
+                csPostListOverlay.postListSelected .= nextId
+                csPostListOverlay.postListPosts %=
+                  filterMessages (((/=) `on` _mMessageId) msg)
+        _ -> return ()
