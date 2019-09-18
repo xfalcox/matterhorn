@@ -164,8 +164,13 @@ editMessageInChannel new msg cr = do
 
 deleteMessage :: Post -> MH ()
 deleteMessage new = do
-    let cr = ServerChannel $ new^.postChannelIdL
-        isDeletedMessage m = m^.mMessageId == Just (MessagePostId $ new^.postIdL) ||
+    (mainRef, otherRefs) <- getChanRefsFor new
+    deleteMessageInChannel new mainRef
+    forM_ otherRefs $ deleteMessageInChannel new
+
+deleteMessageInChannel :: Post -> ChanRef -> MH ()
+deleteMessageInChannel new cr = do
+    let isDeletedMessage m = m^.mMessageId == Just (MessagePostId $ new^.postIdL) ||
                              isReplyTo (new^.postIdL) m
         chan :: Traversal' ChatState ClientChannel
         chan = csChannel (cr)
