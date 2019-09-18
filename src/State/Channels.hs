@@ -677,6 +677,15 @@ removeChannelFromState cr = do
             csFocus %= Z.filterZipper ((/= cr) . channelListEntryChannelRef)
             updateSidebar
 
+        -- If the channel is a server channel, also remove any
+        -- conversation channels for conversations in this server
+        -- channel.
+        withServerChannel cr $ \cId -> do
+            st <- use id
+            let ps = getConversations cId (st^.csChannels)
+                crs = ConversationChannel cId <$> ps
+            forM_ crs removeChannelFromState
+
 nextChannel :: MH ()
 nextChannel = setFocusWith True Z.right
 
