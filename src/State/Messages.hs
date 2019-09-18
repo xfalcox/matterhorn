@@ -755,7 +755,6 @@ getTwoContiguousPosts startMsg msgs =
              else Just (anchor, hinge)
   in go startMsg
 
-
 asyncFetchMessagesForGap :: ChannelId -> Message -> MH ()
 asyncFetchMessagesForGap cId gapMessage =
   let cr = ServerChannel cId
