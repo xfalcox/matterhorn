@@ -243,6 +243,8 @@ module Types
   , raiseInternalEvent
   , getNewMessageCutoff
   , getEditedMessageCutoff
+  , withServerChannel
+  , withConversationChannel
 
   , normalChannelSigil
 
@@ -1962,3 +1964,11 @@ data OpenInBrowser =
     OpenLinkChoice LinkChoice
     | OpenLocalFile FilePath
     deriving (Eq, Show)
+
+withServerChannel :: ChanRef -> (ChannelId -> MH ()) -> MH ()
+withServerChannel (ServerChannel cId) f = f cId
+withServerChannel (ConversationChannel {}) _ = return ()
+
+withConversationChannel :: ChanRef -> (ChannelId -> PostId -> MH ()) -> MH ()
+withConversationChannel (ConversationChannel cId pId) f = f cId pId
+withConversationChannel (ServerChannel {}) _ = return ()

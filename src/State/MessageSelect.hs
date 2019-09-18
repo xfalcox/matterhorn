@@ -124,14 +124,11 @@ viewSelectedMessage = do
 fillSelectedGap :: MH ()
 fillSelectedGap = do
   cr <- use csCurrentChannelRef
-  case cr of
-      ConversationChannel {} ->
-          return ()
-      ServerChannel cId -> do
-          selected <- use (to getSelectedMessage)
-          case selected of
-            Just msg | isGap msg -> asyncFetchMessagesForGap cId msg
-            _ -> return ()
+  withServerChannel cr $ \cId -> do
+      selected <- use (to getSelectedMessage)
+      case selected of
+        Just msg | isGap msg -> asyncFetchMessagesForGap cId msg
+        _ -> return ()
 
 viewMessage :: Message -> MH ()
 viewMessage m = do

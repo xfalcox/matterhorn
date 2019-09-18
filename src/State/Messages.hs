@@ -707,28 +707,25 @@ maybePostUsername st p =
 asyncFetchMoreMessages :: MH ()
 asyncFetchMoreMessages = do
     cr <- use csCurrentChannelRef
-    case cr of
-        ConversationChannel {} ->
-            return ()
-        ServerChannel cId ->
-           withChannel cr $ \chan ->
-               let offset = max 0 $ length (chan^.ccContents.cdMessages) - 2
-                   page = offset `div` pageAmount
-                   usefulMsgs = getTwoContiguousPosts Nothing (chan^.ccContents.cdMessages.to reverseMessages)
-                   sndOldestId = (messagePostId . snd) =<< usefulMsgs
-                   query = MM.defaultPostQuery
-                             { MM.postQueryPage = maybe (Just page) (const Nothing) sndOldestId
-                             , MM.postQueryPerPage = Just pageAmount
-                             , MM.postQueryBefore = sndOldestId
-                             }
-                   addTrailingGap = MM.postQueryBefore query == Nothing &&
-                                    MM.postQueryPage query == Just 0
-               in doAsyncChannelMM Preempt cId
-                      (\s _ c -> MM.mmGetPostsForChannel c query s)
-                      (\_ p -> Just $ do
-                          pp <- addObtainedMessages cr (-pageAmount) addTrailingGap p
-                          postProcessMessageAdd pp
-                          mh $ invalidateCacheEntry (ChannelMessages cr))
+    withServerChannel $ \cId ->
+       withChannel cr $ \chan ->
+           let offset = max 0 $ length (chan^.ccContents.cdMessages) - 2
+               page = offset `div` pageAmount
+               usefulMsgs = getTwoContiguousPosts Nothing (chan^.ccContents.cdMessages.to reverseMessages)
+               sndOldestId = (messagePostId . snd) =<< usefulMsgs
+               query = MM.defaultPostQuery
+                         { MM.postQueryPage = maybe (Just page) (const Nothing) sndOldestId
+                         , MM.postQueryPerPage = Just pageAmount
+                         , MM.postQueryBefore = sndOldestId
+                         }
+               addTrailingGap = MM.postQueryBefore query == Nothing &&
+                                MM.postQueryPage query == Just 0
+           in doAsyncChannelMM Preempt cId
+                  (\s _ c -> MM.mmGetPostsForChannel c query s)
+                  (\_ p -> Just $ do
+                      pp <- addObtainedMessages cr (-pageAmount) addTrailingGap p
+                      postProcessMessageAdd pp
+                      mh $ invalidateCacheEntry (ChannelMessages cr))
 
 -- | Given a starting point and a direction to move from that point,
 -- returns the closest two adjacent messages on that direction (as a
