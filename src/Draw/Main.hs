@@ -23,6 +23,7 @@ import           Lens.Micro.Platform ( (.~), (^?!), to, view, folding )
 
 import           Network.Mattermost.Types ( Type(Direct, Private, Group)
                                           , ServerTime(..), UserId, postRootId, postId
+                                          , ChannelId
                                           )
 
 
@@ -276,6 +277,20 @@ renderUserCommandBox st hs =
 
 renderChannelHeader :: ChatState -> HighlightSet -> ClientChannel -> Widget Name
 renderChannelHeader st hs chan =
+    case chan^.ccInfo.cdChannelRef of
+        ServerChannel {} -> renderServerChannelHeader st hs chan
+        ConversationChannel cId _ -> renderConversationChannelHeader st hs chan cId
+
+renderConversationChannelHeader :: ChatState -> HighlightSet -> ClientChannel -> ChannelId -> Widget Name
+renderConversationChannelHeader st hs chan parentChannelId =
+    let parentChannelRef = ServerChannel parentChannelId
+        Just parentChan = findChannelByRef parentChannelRef (st^.csChannels)
+    in vBox [ txt $ "Conversation: " <> (chan^.ccInfo.cdName)
+            , (padRight (Pad 3) $ txt "In channel:") <+> (renderText' hs $ mkChannelName (parentChan^.ccInfo))
+            ]
+
+renderServerChannelHeader :: ChatState -> HighlightSet -> ClientChannel -> Widget Name
+renderServerChannelHeader st hs chan =
     let chnType = chan^.ccInfo.cdType
         topicStr = chan^.ccInfo.cdHeader
         userHeader u = let s = T.intercalate " " $ filter (not . T.null) parts
