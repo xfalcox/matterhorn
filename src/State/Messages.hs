@@ -139,22 +139,28 @@ shouldSkipMessage s = T.all (`elem` (" \t"::String)) s
 
 editMessage :: Post -> MH ()
 editMessage new = do
-    myId <- gets myUserId
-    let cr = ServerChannel $ new^.postChannelIdL
-        isEditedMessage m = m^.mMessageId == Just (MessagePostId $ new^.postIdL)
-        (msg, mentionedUsers) = clientPostToMessage (toClientPost new (new^.postRootIdL))
-        chan = csChannel (cr)
-    chan . ccContents . cdMessages . traversed . filtered isEditedMessage .= msg
-    mh $ invalidateCacheEntry (ChannelMessages cr)
+    let (msg, mentionedUsers) = clientPostToMessage (toClientPost new (new^.postRootIdL))
+    (mainRef, otherRefs) <- getChanRefsFor new
+
+    editMessageInChannel new msg mainRef
+    forM_ otherRefs $ editMessageInChannel new msg
 
     fetchMentionedUsers mentionedUsers
-
-    when (postUserId new /= Just myId) $
-        chan %= adjustEditedThreshold new
-
     csPostMap.ix(postId new) .= msg
     asyncFetchReactionsForPost (postChannelId new) new
     asyncFetchAttachments new
+
+editMessageInChannel :: Post -> Message -> ChanRef -> MH ()
+editMessageInChannel new msg cr = do
+    myId <- gets myUserId
+    let isEditedMessage m = m^.mMessageId == Just (MessagePostId $ new^.postIdL)
+        chan = csChannel (cr)
+
+    chan . ccContents . cdMessages . traversed . filtered isEditedMessage .= msg
+    mh $ invalidateCacheEntry (ChannelMessages cr)
+
+    when (postUserId new /= Just myId) $
+        chan %= adjustEditedThreshold new
 
 deleteMessage :: Post -> MH ()
 deleteMessage new = do
