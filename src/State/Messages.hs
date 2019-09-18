@@ -147,7 +147,7 @@ editMessage new = do
 
     fetchMentionedUsers mentionedUsers
     csPostMap.ix(postId new) .= msg
-    asyncFetchReactionsForPost (postChannelId new) new
+    asyncFetchReactionsForPost new
     asyncFetchAttachments new
 
 editMessageInChannel :: Post -> Message -> ChanRef -> MH ()
@@ -557,7 +557,7 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                               then c & ccInfo.cdMentionCount %~ succ
                               else c)
                       )
-                    asyncFetchReactionsForPost cId new
+                    asyncFetchReactionsForPost new
                     asyncFetchAttachments new
                     postedChanMessage
 

@@ -55,6 +55,7 @@ module Types
   , UserFetch(..)
   , writeBChan
   , getChanRefsFor
+  , getChanRefsForPostId
 
   , mkChannelZipperList
   , ChannelListGroup(..)
@@ -518,18 +519,6 @@ getDMChannelsInOrder now config cconfig prefs us cs =
         sorted = sortBy sorter allDmChans
         third (_, _, c) = c
     in third <$> sorted
-
-getChanRefsFor :: Post -> MH (ChanRef, [ChanRef])
-getChanRefsFor p = do
-    st <- use id
-    let cId = p^.postChannelIdL
-        convs = getConversations cId (_csChannels st)
-        cr = ServerChannel cId
-    case postRootId p of
-        Nothing -> return (cr, [])
-        Just rootId -> if rootId `elem` convs
-                       then return (cr, [ConversationChannel cId rootId])
-                       else return (cr, [])
 
 useNickname' :: Maybe ClientConfig -> UserPreferences -> Bool
 useNickname' clientConfig prefs =
@@ -1759,6 +1748,23 @@ writeBChan chan e = do
     written <- liftIO $ BCH.writeBChanNonBlocking chan e
     when (not written) $
         error $ "mhSendEvent: BChan full, please report this as a bug!"
+
+getChanRefsForPostId :: PostId -> MH (ChanRef, [ChanRef])
+getChanRefsForPostId pId = do
+    st <- use id
+    case getMessageForPostId st pId of
+        Just msg | Just p <- msg^.mOriginalPost -> do
+            let convs = getConversations cId (_csChannels st)
+                cr = ServerChannel cId
+                cId = postChannelId p
+                rootId = fromMaybe pId $ postRootId p
+            if rootId `elem` convs
+               then return (cr, [ConversationChannel cId rootId])
+               else return (cr, [])
+        _ -> error "BUG: getChanRefsForPostId: got post ID with no post in post map"
+
+getChanRefsFor :: Post -> MH (ChanRef, [ChanRef])
+getChanRefsFor p = getChanRefsForPostId (postId p)
 
 -- | Log and raise an error.
 mhError :: MHError -> MH ()

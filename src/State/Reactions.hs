@@ -22,32 +22,45 @@ import           State.Common ( fetchMentionedUsers )
 import           Types
 
 
-asyncFetchReactionsForPost :: ChannelId -> Post -> MH ()
-asyncFetchReactionsForPost cId p
+asyncFetchReactionsForPost :: Post -> MH ()
+asyncFetchReactionsForPost p
   | not (p^.postHasReactionsL) = return ()
-  | otherwise = doAsyncChannelMM Normal cId
+  | otherwise = do
+      let cId = p^.postChannelIdL
+      doAsyncChannelMM Normal cId
         (\s _ _ -> fmap toList (mmGetReactionsForPost (p^.postIdL) s))
-        (\_ rs -> Just $ addReactions cId rs)
+        (\_ rs -> Just $ addReactions rs)
 
-addReactions :: ChannelId -> [Reaction] -> MH ()
-addReactions cId rs = do
-    let cr = ServerChannel cId
-    mh $ invalidateCacheEntry $ ChannelMessages cr
-    csChannel(cr).ccContents.cdMessages %= fmap upd
+addReactions :: [Reaction] -> MH ()
+addReactions rs = do
     let mentions = S.fromList $ UserIdMention <$> reactionUserId <$> rs
     fetchMentionedUsers mentions
-  where upd msg = msg & mReactions %~ insertAll (msg^.mMessageId)
-        insert mId r
-          | mId == Just (MessagePostId (r^.reactionPostIdL)) =
-              Map.insertWith S.union (r^.reactionEmojiNameL) (S.singleton $ r^.reactionUserIdL)
-          | otherwise = id
-        insertAll mId msg = foldr (insert mId) msg rs
 
-removeReaction :: Reaction -> ChannelId -> MH ()
-removeReaction r cId = do
-    let cr = ServerChannel cId
-    mh $ invalidateCacheEntry $ ChannelMessages cr
-    csChannel(cr).ccContents.cdMessages %= fmap upd
+    forM_ rs addReaction
+
+addReaction :: Reaction -> MH ()
+addReaction r = do
+    (mainRef, otherRefs) <- getChanRefsForPostId (r^.reactionPostIdL)
+
+    forM_ (mainRef:otherRefs) $ \cr -> do
+        mh $ invalidateCacheEntry $ ChannelMessages cr
+        csChannel(cr).ccContents.cdMessages %= fmap upd
+
+  where upd msg = msg & mReactions %~ insertAll (msg^.mMessageId)
+        insert mId re
+          | mId == Just (MessagePostId (re^.reactionPostIdL)) =
+              Map.insertWith S.union (re^.reactionEmojiNameL) (S.singleton $ re^.reactionUserIdL)
+          | otherwise = id
+        insertAll mId msg = foldr (insert mId) msg [r]
+
+removeReaction :: Reaction -> MH ()
+removeReaction r = do
+    (mainRef, otherRefs) <- getChanRefsForPostId (r^.reactionPostIdL)
+
+    forM_ (mainRef:otherRefs) $ \cr -> do
+        mh $ invalidateCacheEntry $ ChannelMessages cr
+        csChannel(cr).ccContents.cdMessages %= fmap upd
+
   where upd m | m^.mMessageId == Just (MessagePostId $ r^.reactionPostIdL) =
                   m & mReactions %~ (Map.alter delReaction (r^.reactionEmojiNameL))
               | otherwise = m

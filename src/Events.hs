@@ -272,13 +272,11 @@ handleWSEvent we = do
             | otherwise -> return ()
 
         WMReactionAdded
-            | Just r <- wepReaction (weData we)
-            , Just cId <- webChannelId (weBroadcast we) -> addReactions cId [r]
+            | Just r <- wepReaction (weData we) -> addReactions [r]
             | otherwise -> return ()
 
         WMReactionRemoved
-            | Just r <- wepReaction (weData we)
-            , Just cId <- webChannelId (weBroadcast we) -> removeReaction r cId
+            | Just r <- wepReaction (weData we) -> removeReaction r
             | otherwise -> return ()
 
         WMChannelViewed
