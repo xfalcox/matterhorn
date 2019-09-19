@@ -35,6 +35,7 @@ userSearchScopePrompt scope =
         ChannelNonMembers _ _ -> "Search users:"
         AllUsers Nothing      -> "Search users:"
         AllUsers (Just _)     -> "Search team members:"
+        ConversationParticipants {} -> "Search thread participants:"
 
 userSearchScopeNoResults :: UserSearchScope -> Widget Name
 userSearchScopeNoResults scope =
@@ -42,6 +43,7 @@ userSearchScopeNoResults scope =
         ChannelMembers _ _    -> "No users in channel."
         ChannelNonMembers _ _ -> "All users in your team are already in this channel."
         AllUsers _            -> "No users found."
+        ConversationParticipants {} -> "No users found."
 
 userSearchScopeHeader :: UserSearchScope -> Widget Name
 userSearchScopeHeader scope =
@@ -50,6 +52,7 @@ userSearchScopeHeader scope =
         ChannelNonMembers {} -> "Invite Users to Channel"
         AllUsers Nothing     -> "Users On This Server"
         AllUsers (Just _)    -> "Users In My Team"
+        ConversationParticipants {} -> "Thread Participants"
 
 renderUser :: Bool -> UserInfo -> Widget Name
 renderUser foc ui =

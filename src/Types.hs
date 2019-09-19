@@ -1354,7 +1354,7 @@ nullChannelListOverlayState =
                         , _listOverlaySearching      = False
                         , _listOverlayEnterHandler   = const $ return False
                         , _listOverlayNewList        = newList
-                        , _listOverlayFetchResults   = const $ const $ const $ return mempty
+                        , _listOverlayFetchResults   = const $ const $ const $ const $ return mempty
                         }
 
 nullUserListOverlayState :: ListOverlayState UserInfo UserSearchScope
@@ -1366,7 +1366,7 @@ nullUserListOverlayState =
                         , _listOverlaySearching      = False
                         , _listOverlayEnterHandler   = const $ return False
                         , _listOverlayNewList        = newList
-                        , _listOverlayFetchResults   = const $ const $ const $ return mempty
+                        , _listOverlayFetchResults   = const $ const $ const $ const $ return mempty
                         }
 
 nullEmojiListOverlayState :: ListOverlayState (Bool, T.Text) ()
@@ -1378,7 +1378,7 @@ nullEmojiListOverlayState =
                         , _listOverlaySearching      = False
                         , _listOverlayEnterHandler   = const $ return False
                         , _listOverlayNewList        = newList
-                        , _listOverlayFetchResults   = const $ const $ const $ return mempty
+                        , _listOverlayFetchResults   = const $ const $ const $ const $ return mempty
                         }
 
 -- | The state of channel selection mode.
@@ -1424,7 +1424,7 @@ data ListOverlayState a b =
                      , _listOverlayNewList :: Vec.Vector a -> List Name a
                      -- ^ The function to build a new brick List from a
                      -- vector of search results.
-                     , _listOverlayFetchResults :: b -> Session -> Text -> IO (Vec.Vector a)
+                     , _listOverlayFetchResults :: ChatState -> b -> Session -> Text -> IO (Vec.Vector a)
                      -- ^ The function to call to issue a search query
                      -- to the server.
                      }
@@ -1434,6 +1434,7 @@ data UserSearchScope =
     ChannelMembers ChannelId TeamId
     | ChannelNonMembers ChannelId TeamId
     | AllUsers (Maybe TeamId)
+    | ConversationParticipants ChannelId PostId
 
 -- | The scope for searching for channels to join.
 data ChannelSearchScope =

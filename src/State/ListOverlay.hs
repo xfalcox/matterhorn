@@ -74,7 +74,7 @@ enterListOverlayMode :: (Lens' ChatState (ListOverlayState a b))
                      -- ^ The overlay's initial search scope
                      -> (a -> MH Bool)
                      -- ^ The overlay's enter keypress handler
-                     -> (b -> Session -> Text -> IO (Vec.Vector a))
+                     -> (ChatState -> b -> Session -> Text -> IO (Vec.Vector a))
                      -- ^ The overlay's results fetcher function
                      -> MH ()
 enterListOverlayMode which mode scope enterHandler fetcher = do
@@ -102,8 +102,9 @@ resetListOverlaySearch which = do
         session <- getSession
         scope <- use (which.listOverlaySearchScope)
         fetcher <- use (which.listOverlayFetchResults)
+        st <- use id
         doAsyncWith Preempt $ do
-            results <- fetcher scope session searchString
+            results <- fetcher st scope session searchString
             return $ Just $ do
                 which.listOverlaySearchResults .= newList results
                 which.listOverlaySearching .= False

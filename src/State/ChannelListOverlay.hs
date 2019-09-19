@@ -36,6 +36,7 @@ enterHandler chan = do
     return True
 
 fetchResults :: TeamId
+             -> ChatState
              -> ChannelSearchScope
              -- ^ The scope to search
              -> Session
@@ -43,7 +44,7 @@ fetchResults :: TeamId
              -> Text
              -- ^ The search string
              -> IO (Vec.Vector Channel)
-fetchResults myTId AllChannels session searchString = do
+fetchResults myTId _ AllChannels session searchString = do
     resultChans <- MM.mmSearchChannels myTId searchString session
     -- chans <- Seq.filter (\ c -> not (channelId c `elem` myChannels)) <$> loop mempty 0
     let sortedChans = Vec.fromList $ toList $ Seq.sortBy (compare `on` channelName) resultChans

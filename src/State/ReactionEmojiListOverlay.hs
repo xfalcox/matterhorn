@@ -73,6 +73,8 @@ fetchResults :: UserId
              -- reactions in the list
              -> EmojiCollection
              -- ^ The emoji collection
+             -> ChatState
+             -- ^ Chat state
              -> ()
              -- ^ The scope to search
              -> Session
@@ -80,7 +82,7 @@ fetchResults :: UserId
              -> Text
              -- ^ The search string
              -> IO (Vec.Vector (Bool, T.Text))
-fetchResults myId msg em () session searchString = do
+fetchResults myId msg em _ () session searchString = do
     let currentReactions = [ (myId `Set.member` uIds, k)
                            | (k, uIds) <- M.toList (msg^.mReactions)
                            ]

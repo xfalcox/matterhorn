@@ -15,10 +15,13 @@ import           Prelude.MH
 
 import qualified Brick.Widgets.List as L
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Foldable as F
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Vector as Vec
-import           Lens.Micro.Platform ( (.~) )
+import           Data.List ( nub, sortBy )
+import           Data.Ord ( comparing )
+import           Lens.Micro.Platform ( (.~), (^?) )
 
 import qualified Network.Mattermost.Endpoints as MM
 import qualified Network.Mattermost.Types.Config as MM
@@ -27,6 +30,7 @@ import           Network.Mattermost.Types
 import           State.Channels ( createOrFocusDMChannel, addUserToCurrentChannel )
 import           State.ListOverlay
 import           Types
+import           Types.Common ( sanitizeUserText )
 
 
 -- | Show the user list overlay for searching/showing members of the
@@ -34,16 +38,21 @@ import           Types
 enterChannelMembersUserList :: MH ()
 enterChannelMembersUserList = do
     cr <- use csCurrentChannelRef
-    let cId = case cr of
-            ServerChannel i -> i
-            ConversationChannel i _ -> i
     myId <- gets myUserId
-    myTId <- gets myTeamId
-    enterUserListMode (ChannelMembers cId myTId)
-      (\u -> case u^.uiId /= myId of
-        True -> createOrFocusDMChannel u Nothing >> return True
-        False -> return False
-      )
+    case cr of
+        ServerChannel cId -> do
+            myTId <- gets myTeamId
+            enterUserListMode (ChannelMembers cId myTId)
+              (\u -> case u^.uiId /= myId of
+                True -> createOrFocusDMChannel u Nothing >> return True
+                False -> return False
+              )
+        ConversationChannel cId pId -> do
+            enterUserListMode (ConversationParticipants cId pId)
+              (\u -> case u^.uiId /= myId of
+                True -> createOrFocusDMChannel u Nothing >> return True
+                False -> return False
+              )
 
 -- | Show the user list overlay for showing users that are not members
 -- of the current channel for the purpose of adding them to the
@@ -116,14 +125,49 @@ userListMove = listOverlayMove csUserListOverlay
 userListPageSize :: Int
 userListPageSize = 10
 
-getUserSearchResults :: UserSearchScope
+getUserSearchResults :: ChatState
+                     -- ^ Chat state
+                     -> UserSearchScope
                      -- ^ The scope to search
                      -> Session
                      -- ^ The connection session
                      -> Text
                      -- ^ The search string
                      -> IO (Vec.Vector UserInfo)
-getUserSearchResults scope s searchString = do
+getUserSearchResults st (ConversationParticipants cId pId) s searchString = do
+    let uIds = nub $ catMaybes $ F.toList $ messageAuthor <$> msgs
+        cr = ConversationChannel cId pId
+        msgs = chan^.ccContents.cdMessages
+        Just chan = st^?csChannel(cr)
+        messageAuthor m =
+            case m^.mUser of
+                UserI _ uId -> Just uId
+                _ -> Nothing
+
+    users <- MM.mmGetUsersByIds (Seq.fromList uIds) s
+
+    let uList = toList users
+        matchList = filter matchUser uList
+        matchUser u =
+            let f g = T.toLower searchString `T.isInfixOf` g u
+            in any f [ userUsername
+                     , sanitizeUserText . userNickname
+                     , sanitizeUserText . userFirstName
+                     , sanitizeUserText . userLastName
+                     ]
+
+    case null matchList of
+        False -> do
+            statuses <- MM.mmGetUserStatusByIds (Seq.fromList uIds) s
+            let statusMap = HM.fromList [ (statusUserId e, statusStatus e) | e <- toList statuses ]
+                usersWithStatus = [ userInfoFromPair u (fromMaybe "" $ HM.lookup (userId u) statusMap)
+                                  | u <- matchList
+                                  ]
+
+            return $ Vec.fromList $ sortBy (comparing _uiName) usersWithStatus
+        True -> return mempty
+
+getUserSearchResults _ scope s searchString = do
     -- Unfortunately, we don't get pagination control when there is a
     -- search string in effect. We'll get at most 100 results from a
     -- search.
@@ -154,6 +198,9 @@ getUserSearchResults scope s searchString = do
                                AllUsers tId            -> tId
                                ChannelMembers _ tId    -> Just tId
                                ChannelNonMembers _ tId -> Just tId
+                               ConversationParticipants {} ->
+                                   error $ "BUG: getUserSearchResults should not be asking " <>
+                                           "the server about conversation participants"
                            }
     users <- MM.mmSearchUsers query s
 
