@@ -225,9 +225,10 @@ emptyChannelContents = do
 
 ------------------------------------------------------------------------
 
-data ChanRef = ServerChannel ChannelId
-             | ConversationChannel ChannelId PostId
-             deriving (Eq, Ord, Show, Generic, Hashable, Read)
+data ChanRef =
+    ServerChannel ChannelId
+    | ConversationChannel ChannelId PostId
+    deriving (Eq, Ord, Show, Generic, Hashable, Read)
 
 unServerChannel :: ChanRef -> ChannelId
 unServerChannel (ServerChannel cId) = cId
