@@ -19,13 +19,13 @@ import           State.Messages ( sendMessage )
 import           Types
 
 
-findAndRunScript :: Text -> Text -> MH ()
-findAndRunScript scriptName input = do
+findAndRunScript :: ChanRef -> Text -> Text -> MH ()
+findAndRunScript cr scriptName input = do
     fpMb <- liftIO $ locateScriptPath (T.unpack scriptName)
     outputChan <- use (csResources.crSubprocessLog)
     case fpMb of
       ScriptPath scriptPath -> do
-        doAsyncWith Preempt $ runScript outputChan scriptPath input
+        doAsyncWith Preempt $ runScript cr outputChan scriptPath input
       NonexecScriptPath scriptPath -> do
         let msg = ("The script `" <> T.pack scriptPath <> "` cannot be " <>
              "executed. Try running\n" <>
@@ -37,15 +37,14 @@ findAndRunScript scriptName input = do
       ScriptNotFound -> do
         mhError $ NoSuchScript scriptName
 
-runScript :: STM.TChan ProgramOutput -> FilePath -> Text -> IO (Maybe (MH ()))
-runScript outputChan fp text = do
+runScript :: ChanRef -> STM.TChan ProgramOutput -> FilePath -> Text -> IO (Maybe (MH ()))
+runScript cr outputChan fp text = do
   outputVar <- newEmptyMVar
   runLoggedCommand True outputChan fp [] (Just $ T.unpack text) (Just outputVar)
   po <- takeMVar outputVar
   return $ case programExitCode po of
     ExitSuccess -> case null $ programStderr po of
         True -> Just $ do
-            cr <- use csCurrentChannelRef
             mode <- use (csEditState.cedEditMode)
             case cr of
                 ServerChannel cId ->
