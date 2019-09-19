@@ -165,8 +165,19 @@ editMessageInChannel new msg cr = do
 deleteMessage :: Post -> MH ()
 deleteMessage new = do
     (mainRef, otherRefs) <- getChanRefsFor new
+
+    -- First, mark the message as deleted in any channels in which it
+    -- appears.
     deleteMessageInChannel new mainRef
     forM_ otherRefs $ deleteMessageInChannel new
+
+    -- Then find any conversation channels for which this is the *root*
+    -- message, and delete them.
+    let refsToDelete = filter shouldDelete otherRefs
+        shouldDelete (ConversationChannel _ pId) = pId == postId new
+        shouldDelete _ = False
+
+    forM_ refsToDelete removeChannelFromState
 
 deleteMessageInChannel :: Post -> ChanRef -> MH ()
 deleteMessageInChannel new cr = do
