@@ -554,9 +554,13 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
 
                     csPostMap.at(postId new) .= Just msg'
 
-                    let prevUnread = hasUnread st cr
-
                     mh $ invalidateCacheEntry $ ChannelMessages cr
+
+                    let convs = getConversations cId (st^.csChannels)
+                        prevUnread = hasUnread st cr
+                        effectiveRootId = fromMaybe (postId new) (postRootId new)
+                        postInFollowedConversation = effectiveRootId `elem` convs
+
                     csChannels %= modifyChannelByRef cr
                       ((ccContents.cdMessages %~ addMessage msg') .
                        (adjustUpdated new) .
@@ -565,30 +569,29 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                               else case newPostData of
                                   OldPost _ -> c
                                   RecentPost _ _ -> case cr of
-                                      ServerChannel {} -> case postRootId new of
-                                          Nothing ->
-                                              updateNewMessageIndicator new c
-                                          Just rootId ->
-                                              -- If the post is part of a
-                                              -- conversation that we're
-                                              -- following, we want to update
-                                              -- the new message indicator of
-                                              -- the conversation channel,
-                                              -- not the parent channel.
-                                              let convs = getConversations cId (st^.csChannels)
-                                              in if not $ rootId `elem` convs
-                                                 then updateNewMessageIndicator new c
-                                                 else c & ccInfo.cdViewed .~ (Just $ postCreateAt new)
+                                      ServerChannel {} ->
+                                          if postInFollowedConversation
+                                          then if not prevUnread
+                                               then c & ccInfo.cdViewed .~ (Just $ postCreateAt new)
+                                               else c
+                                          else updateNewMessageIndicator new c
                                       ConversationChannel {} ->
                                           updateNewMessageIndicator new c
                        ) .
-                       (\c -> if wasMentioned
-                              then c & ccInfo.cdMentionCount %~ succ
-                              else c)
+                       (\c -> if not wasMentioned
+                              then c
+                              else case cr of
+                                  ConversationChannel {} ->
+                                      c & ccInfo.cdMentionCount %~ succ
+                                  ServerChannel {} ->
+                                      if postInFollowedConversation
+                                      then c
+                                      else c & ccInfo.cdMentionCount %~ succ
+                       )
                       )
                     asyncFetchReactionsForPost new
                     asyncFetchAttachments new
-                    postedChanMessage prevUnread
+                    postedChanMessage postInFollowedConversation prevUnread
 
                 doHandleAddedMessage = do
                     -- If the message is in reply to another message,
@@ -608,14 +611,11 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
 
                     doAddMessage
 
-                postedChanMessage prevUnread =
+                postedChanMessage postInFollowedConversation prevUnread =
                   withChannelOrDefault cr noAction $ \chan -> do
                       currCr <- use csCurrentChannelRef
 
-                      let convs = getConversations cId (st^.csChannels)
-                          rootId = fromMaybe (postId new) (postRootId new)
-                          postInFollowedConversation = rootId `elem` convs
-                          notifyPref = notifyPreference (myUser st) chan
+                      let notifyPref = notifyPreference (myUser st) chan
                           -- If this is for a server channel, and the
                           -- post is in a thread we're following in a
                           -- conversation channel, and this channel
@@ -627,7 +627,7 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                           shouldUpdateViewed =
                               cr == currCr || shouldSkipConversationMessage
                           shouldSkipConversationMessage =
-                              postInFollowedConversation && not prevUnread
+                              isServerChannel cr && postInFollowedConversation && not prevUnread
                           curChannelAction =
                               if shouldUpdateViewed
                               then updateServerViewed cr

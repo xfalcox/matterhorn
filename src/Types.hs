@@ -469,10 +469,13 @@ hasUnread' chan =
             fromMaybe False $ do
                 lastViewTime <- _cdViewed info
                 return ((_cdUpdated info) > lastViewTime)
-    in or [ hasEditedThreshold
-          , unreadByTimestamp
-          , hasNewMsgLine
-          ]
+    in case chan^.ccInfo.cdChannelRef of
+        ServerChannel {} ->
+            or [ unreadByTimestamp
+               , hasEditedThreshold
+               ]
+        ConversationChannel {} ->
+               hasNewMsgLine
 
 mkChannelZipperList :: UTCTime
                     -> Config
