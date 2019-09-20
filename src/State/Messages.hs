@@ -561,9 +561,25 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                        (\c -> if currCr == cr
                               then c
                               else case newPostData of
-                                     OldPost _ -> c
-                                     RecentPost _ _ ->
-                                       updateNewMessageIndicator new c) .
+                                  OldPost _ -> c
+                                  RecentPost _ _ -> case cr of
+                                      ServerChannel {} -> case postRootId new of
+                                          Nothing ->
+                                              updateNewMessageIndicator new c
+                                          Just rootId ->
+                                              -- If the post is part of a
+                                              -- conversation that we're
+                                              -- following, we want to update
+                                              -- the new message indicator of
+                                              -- the conversation channel,
+                                              -- not the parent channel.
+                                              let convs = getConversations cId (st^.csChannels)
+                                              in if not $ rootId `elem` convs
+                                                 then updateNewMessageIndicator new c
+                                                 else c
+                                      ConversationChannel {} ->
+                                          updateNewMessageIndicator new c
+                       ) .
                        (\c -> if wasMentioned
                               then c & ccInfo.cdMentionCount %~ succ
                               else c)
