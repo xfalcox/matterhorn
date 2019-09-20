@@ -461,11 +461,18 @@ hasUnread st cr = fromMaybe False $
     hasUnread' <$> findChannelByRef cr (_csChannels st)
 
 hasUnread' :: ClientChannel -> Bool
-hasUnread' chan = fromMaybe False $ do
+hasUnread' chan =
     let info = _ccInfo chan
-    lastViewTime <- _cdViewed info
-    return $ ((_cdUpdated info) > lastViewTime) ||
-             (isJust $ _cdEditedMessageThreshold info)
+        hasNewMsgLine = chan^.ccInfo.cdNewMessageIndicator /= Hide
+        hasEditedThreshold = isJust $ _cdEditedMessageThreshold info
+        unreadByTimestamp =
+            fromMaybe False $ do
+                lastViewTime <- _cdViewed info
+                return ((_cdUpdated info) > lastViewTime)
+    in or [ hasEditedThreshold
+          , unreadByTimestamp
+          , hasNewMsgLine
+          ]
 
 mkChannelZipperList :: UTCTime
                     -> Config

@@ -554,6 +554,8 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
 
                     csPostMap.at(postId new) .= Just msg'
 
+                    let prevUnread = hasUnread st cr
+
                     mh $ invalidateCacheEntry $ ChannelMessages cr
                     csChannels %= modifyChannelByRef cr
                       ((ccContents.cdMessages %~ addMessage msg') .
@@ -576,7 +578,7 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                                               let convs = getConversations cId (st^.csChannels)
                                               in if not $ rootId `elem` convs
                                                  then updateNewMessageIndicator new c
-                                                 else c
+                                                 else c & ccInfo.cdViewed .~ (Just $ postCreateAt new)
                                       ConversationChannel {} ->
                                           updateNewMessageIndicator new c
                        ) .
@@ -586,7 +588,7 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                       )
                     asyncFetchReactionsForPost new
                     asyncFetchAttachments new
-                    postedChanMessage
+                    postedChanMessage prevUnread
 
                 doHandleAddedMessage = do
                     -- If the message is in reply to another message,
@@ -606,14 +608,30 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
 
                     doAddMessage
 
-                postedChanMessage =
+                postedChanMessage prevUnread =
                   withChannelOrDefault cr noAction $ \chan -> do
                       currCr <- use csCurrentChannelRef
 
-                      let notifyPref = notifyPreference (myUser st) chan
-                          curChannelAction = if cr == currCr
-                                             then updateServerViewed cr
-                                             else noAction
+                      let convs = getConversations cId (st^.csChannels)
+                          rootId = fromMaybe (postId new) (postRootId new)
+                          postInFollowedConversation = rootId `elem` convs
+                          notifyPref = notifyPreference (myUser st) chan
+                          -- If this is for a server channel, and the
+                          -- post is in a thread we're following in a
+                          -- conversation channel, and this channel
+                          -- didn't have any unread activity before this
+                          -- post was added, then we want to advance
+                          -- this channel's view timestamp because this
+                          -- messagee is considered "unread" only in the
+                          -- conversation channel.
+                          shouldUpdateViewed =
+                              cr == currCr || shouldSkipConversationMessage
+                          shouldSkipConversationMessage =
+                              postInFollowedConversation && not prevUnread
+                          curChannelAction =
+                              if shouldUpdateViewed
+                              then updateServerViewed cr
+                              else noAction
                           originUserAction =
                             if | fromMe                            -> noAction
                                | ignoredJoinLeaveMessage           -> noAction
