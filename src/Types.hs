@@ -530,7 +530,12 @@ getDMChannelsInOrder now config cconfig prefs us cs =
                  else GT
         sorted = sortBy sorter allDmChans
         third (_, _, c) = c
-    in third <$> sorted
+        mkEntry e@(CLUserDM cId _) = e : getConversationChannelEntriesFor cId cs
+        mkEntry e@(CLGroupDM cId) = e : getConversationChannelEntriesFor cId cs
+        mkEntry e = error $ "BUG: getDMChannelIdsInOrder should not get a " <> show e
+    in concat $
+       fmap mkEntry $
+       third <$> sorted
 
 useNickname' :: Maybe ClientConfig -> UserPreferences -> Bool
 useNickname' clientConfig prefs =
