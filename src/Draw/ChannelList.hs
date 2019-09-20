@@ -129,8 +129,13 @@ mkChannelEntryData st e =
                             then u^.uiNickName.non (u^.uiName)
                             else u^.uiName
                 in (uname, Just $ T.singleton $ userSigilFromInfo u, True, Just $ u^.uiStatus)
-            CLConversation {} ->
-                (chan^.ccInfo.cdName, Just " ", True, Nothing)
+            CLConversation cId _ ->
+                let Just parentChan = findChannelById cId (st^.csChannels)
+                    indent = case parentChan^.ccInfo.cdType of
+                        MM.Direct -> "  "
+                        MM.Group -> "  "
+                        _ -> " "
+                in (chan^.ccInfo.cdName, Just indent, True, Nothing)
         sigilWithSpace = sigil <> if addSpace then " " else ""
         prevEditSigil = "»"
         sigil = if current
