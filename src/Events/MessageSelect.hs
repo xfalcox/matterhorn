@@ -52,6 +52,9 @@ messageSelectKeybindings = mkKeybindings
     , mkKb FollowConversationEvent "Follow the conversation in a separate window"
         followSelectedConversation
 
+    , mkKb UnfollowConversationEvent "Unfollow the selected conversation"
+        unfollowSelectedConversation
+
     , mkKb ReplyMessageEvent "Begin composing a reply to the selected message"
          beginReplyCompose
 

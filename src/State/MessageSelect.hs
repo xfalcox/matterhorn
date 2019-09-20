@@ -21,6 +21,7 @@ module State.MessageSelect
   , flagMessage
   , getSelectedMessage
   , followSelectedConversation
+  , unfollowSelectedConversation
   )
 where
 
@@ -85,6 +86,26 @@ followSelectedConversation = do
                   setMode Main
               ConversationChannel {} ->
                   return ()
+
+unfollowSelectedConversation :: MH ()
+unfollowSelectedConversation = do
+  selected <- use (to getSelectedMessage)
+  case selected of
+      Nothing -> return ()
+      Just m ->
+          case m^.mOriginalPost of
+              Nothing -> return ()
+              Just p -> do
+                  cs <- use csChannels
+                  let convs = getConversations cId cs
+                      rootId = fromMaybe (postId p) (postRootId p)
+                      cId = postChannelId p
+                  when (rootId `elem` convs) $ do
+                      let cr = ConversationChannel cId rootId
+                      csChannels %= removeChannel cr
+                      updateSidebar
+
+                  setMode Main
 
 beginMessageSelect :: MH ()
 beginMessageSelect = do

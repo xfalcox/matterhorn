@@ -476,13 +476,14 @@ messageSelectBottomBar st =
         cId = case cr of
             ServerChannel i -> i
             ConversationChannel i _ -> i
+        isFollowing p = let pId = fromMaybe (postId p) (postRootId p)
+                        in isFollowingConversation cId pId (st^.csChannels)
         isFollowable m = case m^.mOriginalPost of
             Nothing -> False
-            Just p ->
-                let pId = case postRootId p of
-                        Nothing -> postId p
-                        Just rootId -> rootId
-                in not $ isFollowingConversation cId pId (st^.csChannels)
+            Just p -> not $ isFollowing p
+        isUnfollowable m = case m^.mOriginalPost of
+            Nothing -> False
+            Just p -> isFollowing p
         options = [ ( not . isGap
                     , ev YankWholeMessageEvent
                     , "yank-all"
@@ -509,7 +510,11 @@ messageSelectBottomBar st =
                     )
                   , ( isFollowable
                     , ev FollowConversationEvent
-                    , "follow thread"
+                    , "follow"
+                    )
+                  , ( isUnfollowable
+                    , ev UnfollowConversationEvent
+                    , "unfollow"
                     )
                   , ( \m -> isMine st m && isEditable m
                     , ev EditMessageEvent

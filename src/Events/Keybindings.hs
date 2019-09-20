@@ -106,6 +106,7 @@ defaultBindings ev =
         NextUnreadChannelEvent -> [ meta (key 'a') ]
         ShowAttachmentListEvent -> [ ctrl (key 'x') ]
         FollowConversationEvent -> [ key 'F' ]
+        UnfollowConversationEvent -> [ key 'U' ]
         NextUnreadUserOrChannelEvent -> [ ]
         LastChannelEvent -> [ meta (key 's') ]
         EnterOpenURLModeEvent -> [ ctrl (key 'o') ]
