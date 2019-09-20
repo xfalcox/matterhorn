@@ -3,7 +3,6 @@
 module State.Channels
   ( updateSidebar
   , updateViewed
-  , updateViewedChan
   , refreshChannel
   , refreshChannelsAndUsers
   , setFocus
