@@ -40,11 +40,13 @@ addReactions rs = do
 
 addReaction :: Reaction -> MH ()
 addReaction r = do
-    (mainRef, otherRefs) <- getChanRefsForPostId (r^.reactionPostIdL)
-
-    forM_ (mainRef:otherRefs) $ \cr -> do
-        mh $ invalidateCacheEntry $ ChannelMessages cr
-        csChannel(cr).ccContents.cdMessages %= fmap upd
+    result <- getChanRefsForPostId (r^.reactionPostIdL)
+    case result of
+        Nothing -> return ()
+        Just (mainRef, otherRefs) ->
+            forM_ (mainRef:otherRefs) $ \cr -> do
+                mh $ invalidateCacheEntry $ ChannelMessages cr
+                csChannel(cr).ccContents.cdMessages %= fmap upd
 
   where upd msg = msg & mReactions %~ insertAll (msg^.mMessageId)
         insert mId re
@@ -55,11 +57,13 @@ addReaction r = do
 
 removeReaction :: Reaction -> MH ()
 removeReaction r = do
-    (mainRef, otherRefs) <- getChanRefsForPostId (r^.reactionPostIdL)
-
-    forM_ (mainRef:otherRefs) $ \cr -> do
-        mh $ invalidateCacheEntry $ ChannelMessages cr
-        csChannel(cr).ccContents.cdMessages %= fmap upd
+    result <- getChanRefsForPostId (r^.reactionPostIdL)
+    case result of
+        Nothing -> return ()
+        Just (mainRef, otherRefs) ->
+            forM_ (mainRef:otherRefs) $ \cr -> do
+                mh $ invalidateCacheEntry $ ChannelMessages cr
+                csChannel(cr).ccContents.cdMessages %= fmap upd
 
   where upd m | m^.mMessageId == Just (MessagePostId $ r^.reactionPostIdL) =
                   m & mReactions %~ (Map.alter delReaction (r^.reactionEmojiNameL))

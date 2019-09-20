@@ -1750,7 +1750,7 @@ writeBChan chan e = do
     when (not written) $
         error $ "mhSendEvent: BChan full, please report this as a bug!"
 
-getChanRefsForPostId :: PostId -> MH (ChanRef, [ChanRef])
+getChanRefsForPostId :: PostId -> MH (Maybe (ChanRef, [ChanRef]))
 getChanRefsForPostId pId = do
     st <- use id
     case getMessageForPostId st pId of
@@ -1760,12 +1760,19 @@ getChanRefsForPostId pId = do
                 cId = postChannelId p
                 rootId = fromMaybe pId $ postRootId p
             if rootId `elem` convs
-               then return (cr, [ConversationChannel cId rootId])
-               else return (cr, [])
-        _ -> error "BUG: getChanRefsForPostId: got post ID with no post in post map"
+               then return $ Just (cr, [ConversationChannel cId rootId])
+               else return $ Just (cr, [])
+        _ -> return Nothing
 
 getChanRefsFor :: Post -> MH (ChanRef, [ChanRef])
-getChanRefsFor p = getChanRefsForPostId (postId p)
+getChanRefsFor p = do
+    result <- getChanRefsForPostId (postId p)
+    case result of
+        Nothing ->
+            let cId = postChannelId p
+                cr = ServerChannel cId
+            in return (cr, [])
+        Just pair -> return pair
 
 -- | Log and raise an error.
 mhError :: MHError -> MH ()
