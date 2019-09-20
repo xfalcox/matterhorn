@@ -54,8 +54,8 @@ module Types
   , RequestChan
   , UserFetch(..)
   , writeBChan
-  , getChanRefsFor
-  , getChanRefsForPostId
+  , getChanRefsForPost
+  , getChanRefsForRootPostId
 
   , mkChannelZipperList
   , ChannelListGroup(..)
@@ -1750,29 +1750,20 @@ writeBChan chan e = do
     when (not written) $
         error $ "mhSendEvent: BChan full, please report this as a bug!"
 
-getChanRefsForPostId :: PostId -> MH (Maybe (ChanRef, [ChanRef]))
-getChanRefsForPostId pId = do
+getChanRefsForRootPostId :: ChannelId -> PostId -> MH (ChanRef, [ChanRef])
+getChanRefsForRootPostId cId rootId = do
     st <- use id
-    case getMessageForPostId st pId of
-        Just msg | Just p <- msg^.mOriginalPost -> do
-            let convs = getConversations cId (_csChannels st)
-                cr = ServerChannel cId
-                cId = postChannelId p
-                rootId = fromMaybe pId $ postRootId p
-            if rootId `elem` convs
-               then return $ Just (cr, [ConversationChannel cId rootId])
-               else return $ Just (cr, [])
-        _ -> return Nothing
+    let convs = getConversations cId (_csChannels st)
+        cr = ServerChannel cId
+        convCrs = if rootId `elem` convs
+                  then [ConversationChannel cId rootId]
+                  else []
+    return (cr, convCrs)
 
-getChanRefsFor :: Post -> MH (ChanRef, [ChanRef])
-getChanRefsFor p = do
-    result <- getChanRefsForPostId (postId p)
-    case result of
-        Nothing ->
-            let cId = postChannelId p
-                cr = ServerChannel cId
-            in return (cr, [])
-        Just pair -> return pair
+getChanRefsForPost :: Post -> MH (ChanRef, [ChanRef])
+getChanRefsForPost p =
+    getChanRefsForRootPostId (postChannelId p)
+                             (fromMaybe (postId p) (postRootId p))
 
 -- | Log and raise an error.
 mhError :: MHError -> MH ()

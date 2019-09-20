@@ -40,7 +40,7 @@ updateMessageFlag pId becameFlagged = do
   case msgMb of
     Just msg
       | Just post <- msg^.mOriginalPost -> do
-          (mainRef, otherRefs) <- getChanRefsFor post
+          (mainRef, otherRefs) <- getChanRefsForPost post
 
           updateMessageFlagInChannel mainRef pId becameFlagged
           forM_ otherRefs $ \r ->

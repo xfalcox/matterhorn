@@ -140,7 +140,7 @@ shouldSkipMessage s = T.all (`elem` (" \t"::String)) s
 editMessage :: Post -> MH ()
 editMessage new = do
     let (msg, mentionedUsers) = clientPostToMessage (toClientPost new (new^.postRootIdL))
-    (mainRef, otherRefs) <- getChanRefsFor new
+    (mainRef, otherRefs) <- getChanRefsForPost new
 
     editMessageInChannel new msg mainRef
     forM_ otherRefs $ editMessageInChannel new msg
@@ -164,7 +164,7 @@ editMessageInChannel new msg cr = do
 
 deleteMessage :: Post -> MH ()
 deleteMessage new = do
-    (mainRef, otherRefs) <- getChanRefsFor new
+    (mainRef, otherRefs) <- getChanRefsForPost new
 
     -- First, mark the message as deleted in any channels in which it
     -- appears.
@@ -195,7 +195,7 @@ addNewPostedMessage pa = do
             OldPost p -> p
             RecentPost p _ -> p
 
-    (mainChan, convChans) <- getChanRefsFor post
+    (mainChan, convChans) <- getChanRefsForPost post
 
     mhLog LogGeneral $ T.pack $ "addNewPostedMessage: " <> show (mainChan, convChans)
 
@@ -926,7 +926,7 @@ asyncFetchAttachments p = do
                 | otherwise =
                     m
         return $ Just $ do
-            (mainRef, otherRefs) <- getChanRefsFor p
+            (mainRef, otherRefs) <- getChanRefsForPost p
             forM_ (mainRef:otherRefs) $ \cr -> do
                 csChannel(cr).ccContents.cdMessages.traversed %= addAttachment
                 mh $ invalidateCacheEntry $ ChannelMessages cr
