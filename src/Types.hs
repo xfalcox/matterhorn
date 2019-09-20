@@ -475,7 +475,9 @@ hasUnread' chan =
                , hasEditedThreshold
                ]
         ConversationChannel {} ->
-               hasNewMsgLine
+            or [ hasNewMsgLine
+               , hasEditedThreshold
+               ]
 
 mkChannelZipperList :: UTCTime
                     -> Config

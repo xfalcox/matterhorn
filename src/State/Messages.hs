@@ -159,8 +159,17 @@ editMessageInChannel new msg cr = do
     chan . ccContents . cdMessages . traversed . filtered isEditedMessage .= msg
     mh $ invalidateCacheEntry (ChannelMessages cr)
 
-    when (postUserId new /= Just myId) $
-        chan %= adjustEditedThreshold new
+    when (postUserId new /= Just myId) $ do
+        st <- use id
+        let shouldSetEditThreshold = case cr of
+                ConversationChannel {} -> True
+                ServerChannel {} ->
+                    let effectiveRootId = fromMaybe (postId new) (postRootId new)
+                        convs = getConversations (postChannelId new) (st^.csChannels)
+                    in not $ effectiveRootId `elem` convs
+
+        when shouldSetEditThreshold $
+            chan %= adjustEditedThreshold new
 
 deleteMessage :: Post -> MH ()
 deleteMessage new = do
