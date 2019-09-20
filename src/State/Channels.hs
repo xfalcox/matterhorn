@@ -497,6 +497,8 @@ setFocusWith updatePrev f = do
         mh $ invalidateCacheEntry ChannelSidebar
         resetAutocomplete
         preChangeChannelCommon
+        clearChannelUnreadStatus oldCr
+
         csFocus .= newZipper
 
         now <- liftIO getCurrentTime
