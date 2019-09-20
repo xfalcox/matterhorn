@@ -26,7 +26,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Set as Set
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
-import           Data.List ( sortBy )
+import           Data.List ( sortBy, nub )
 import           Data.Ord ( comparing )
 import           Graphics.Vty ( outputIface )
 import           Graphics.Vty.Output.Interface ( ringTerminalBell )
@@ -224,14 +224,14 @@ addObtainedMessages cr reqCnt addTrailingGap posts =
               (ccContents.cdMessages %~
                \msgs -> let startPoint = join $ _mMessageId <$> getLatestPostMsg msgs
                         in fst $ removeMatchesFromSubset isGap startPoint Nothing msgs)
-          return NoAction
+          return noAction
   else
     -- Adding a block of server-provided messages, which are known to
     -- be contiguous.  Locally this may overlap with some UnknownGap
     -- messages, which can therefore be removed.  Alternatively the
     -- new block may be discontiguous with the local blocks, in which
     -- case the new block should be surrounded by UnknownGaps.
-    withChannelOrDefault cr NoAction $ \chan -> do
+    withChannelOrDefault cr noAction $ \chan -> do
         let pIdList = toList (posts^.postsOrderL)
             -- the first and list PostId in the batch to be added
             earliestPId = last pIdList
@@ -329,7 +329,7 @@ addObtainedMessages cr reqCnt addTrailingGap posts =
         -- corpus, generating needed fetches of data associated with
         -- the post, and determining an notification action to be
         -- taken (if any).
-        action <- foldr andProcessWith NoAction <$>
+        action <- foldr andProcessWith noAction <$>
           mapM (addMessageToState cr False False . OldPost)
                    [ (posts^.postsPostsL) HM.! p
                    | p <- toList (posts^.postsOrderL)
@@ -521,7 +521,7 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                         addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData >>=
                             postProcessMessageAdd
 
-            return NoAction
+            return noAction
         Just _ -> do
             let cp = toClientPost new (new^.postRootIdL)
                 fromMe = (cp^.cpUser == (Just $ myUserId st)) &&
@@ -607,20 +607,20 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                     doAddMessage
 
                 postedChanMessage =
-                  withChannelOrDefault cr NoAction $ \chan -> do
+                  withChannelOrDefault cr noAction $ \chan -> do
                       currCr <- use csCurrentChannelRef
 
                       let notifyPref = notifyPreference (myUser st) chan
                           curChannelAction = if cr == currCr
-                                             then UpdateServerViewed
-                                             else NoAction
+                                             then updateServerViewed cr
+                                             else noAction
                           originUserAction =
-                            if | fromMe                            -> NoAction
-                               | ignoredJoinLeaveMessage           -> NoAction
-                               | notifyPref == NotifyOptionAll     -> NotifyUser [newPostData]
+                            if | fromMe                            -> noAction
+                               | ignoredJoinLeaveMessage           -> noAction
+                               | notifyPref == NotifyOptionAll     -> notifyUser newPostData
                                | notifyPref == NotifyOptionMention
-                                   && wasMentioned                 -> NotifyUser [newPostData]
-                               | otherwise                         -> NoAction
+                                   && wasMentioned                 -> notifyUser newPostData
+                               | otherwise                         -> noAction
 
                       return $ curChannelAction `andProcessWith` originUserAction
 
@@ -631,34 +631,38 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
 -- the server should be updated (e.g., that the channel has been
 -- viewed).  This is a monoid so that it can be folded over when there
 -- are multiple inbound posts to be processed.
-data PostProcessMessageAdd = NoAction
-                           | NotifyUser [PostToAdd]
-                           | UpdateServerViewed
-                           | NotifyUserAndServer [PostToAdd]
+data PostProcessMessageAdd =
+    PostProcessMessageAdd { notifyUserPosts :: [PostToAdd]
+                          , notifyServerChans :: [ChanRef]
+                          }
 
-andProcessWith
-  :: PostProcessMessageAdd -> PostProcessMessageAdd -> PostProcessMessageAdd
-andProcessWith NoAction x                                        = x
-andProcessWith x NoAction                                        = x
-andProcessWith (NotifyUserAndServer p) UpdateServerViewed        = NotifyUserAndServer p
-andProcessWith (NotifyUserAndServer p1) (NotifyUser p2)          = NotifyUserAndServer (p1 <> p2)
-andProcessWith (NotifyUserAndServer p1) (NotifyUserAndServer p2) = NotifyUserAndServer (p1 <> p2)
-andProcessWith (NotifyUser p1) (NotifyUserAndServer p2)          = NotifyUser (p1 <> p2)
-andProcessWith (NotifyUser p1) (NotifyUser p2)                   = NotifyUser (p1 <> p2)
-andProcessWith (NotifyUser p) UpdateServerViewed                 = NotifyUserAndServer p
-andProcessWith UpdateServerViewed UpdateServerViewed             = UpdateServerViewed
-andProcessWith UpdateServerViewed (NotifyUserAndServer p)        = NotifyUserAndServer p
-andProcessWith UpdateServerViewed (NotifyUser p)                 = NotifyUserAndServer p
+noAction :: PostProcessMessageAdd
+noAction = PostProcessMessageAdd [] []
+
+updateServerViewed :: ChanRef -> PostProcessMessageAdd
+updateServerViewed cr = PostProcessMessageAdd [] [cr]
+
+notifyUser :: PostToAdd -> PostProcessMessageAdd
+notifyUser a = PostProcessMessageAdd [a] []
+
+andProcessWith :: PostProcessMessageAdd -> PostProcessMessageAdd -> PostProcessMessageAdd
+andProcessWith (PostProcessMessageAdd ps1 cs1) (PostProcessMessageAdd ps2 cs2) =
+    PostProcessMessageAdd (nub $ ps1 <> ps2) (nub $ cs1 <> cs2)
 
 -- | postProcessMessageAdd performs the actual actions indicated by
 -- the corresponding input value.
 postProcessMessageAdd :: PostProcessMessageAdd -> MH ()
-postProcessMessageAdd ppma = postOp ppma
-    where
-        postOp NoAction                = return ()
-        postOp UpdateServerViewed      = updateViewed False
-        postOp (NotifyUser p)          = maybeRingBell >> mapM_ maybeNotify p
-        postOp (NotifyUserAndServer p) = updateViewed False >> maybeRingBell >> mapM_ maybeNotify p
+postProcessMessageAdd pp = do
+    let ps = notifyUserPosts pp
+        crs = notifyServerChans pp
+
+    when (not $ null crs) $ do
+        forM_ crs $ \cr ->
+            updateViewed cr Nothing
+
+    when (not $ null ps) $ do
+        maybeRingBell
+        mapM_ maybeNotify ps
 
 maybeNotify :: PostToAdd -> MH ()
 maybeNotify (OldPost _) = do
@@ -686,6 +690,7 @@ data PostToAdd =
     -- determines whether the post has any mentions, and that data is
     -- only available in websocket events (and then provided to this
     -- constructor).
+    deriving (Eq)
 
 runNotifyCommand :: Post -> Bool -> MH ()
 runNotifyCommand post mentioned = do

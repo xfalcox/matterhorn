@@ -113,11 +113,10 @@ updateSidebar = do
     when (newCr /= oldCr) $
         fetchVisibleIfNeeded
 
-updateViewed :: Bool -> MH ()
-updateViewed updatePrev = do
-    csCurrentChannel.ccInfo.cdMentionCount .= 0
-    cr <- use csCurrentChannelRef
-    withServerChannel cr $ updateViewedChan updatePrev
+updateViewed :: ChanRef -> Maybe ChanRef -> MH ()
+updateViewed cr prevCr = do
+    csChannel(cr).ccInfo.cdMentionCount .= 0
+    withServerChannel cr $ updateViewedChan prevCr
 
 -- | When a new channel has been selected for viewing, this will
 -- notify the server of the change, and also update the local channel
@@ -128,18 +127,14 @@ updateViewed updatePrev = do
 -- channel (if any) should be updated, too. We typically want to do that
 -- only on channel switching; when we just want to update the view time
 -- of the specified channel, False should be provided.
-updateViewedChan :: Bool -> ChannelId -> MH ()
-updateViewedChan updatePrev cId = use csConnectionStatus >>= \case
+updateViewedChan :: Maybe ChanRef -> ChannelId -> MH ()
+updateViewedChan prevCr cId = use csConnectionStatus >>= \case
     Connected -> do
         -- Only do this if we're connected to avoid triggering noisy
         -- exceptions.
-        pId <- if updatePrev
-               then do
-                   r <- use csRecentChannel
-                   case r of
-                       Just (ServerChannel i) -> return $ Just i
-                       _ -> return Nothing
-               else return Nothing
+        pId <- case prevCr of
+            Just (ServerChannel i) -> return $ Just i
+            _ -> return Nothing
 
         doAsyncChannelMM Preempt cId
           (\s _ c -> MM.mmViewChannel UserMe c pId s)
@@ -492,6 +487,7 @@ setFocusWith :: Bool
              -> Zipper ChannelListGroup ChannelListEntry) -> MH ()
 setFocusWith updatePrev f = do
     oldZipper <- use csFocus
+    oldCr <- use csCurrentChannelRef
     let newZipper = f oldZipper
         newFocus = Z.focus newZipper
         oldFocus = Z.focus oldZipper
@@ -508,7 +504,7 @@ setFocusWith updatePrev f = do
         newCr <- use csCurrentChannelRef
         csChannel(newCr).ccInfo.cdSidebarShowOverride .= Just now
 
-        updateViewed updatePrev
+        updateViewed newCr (if updatePrev then Just oldCr else Nothing)
         postChangeChannelCommon
 
 postChangeChannelCommon :: MH ()

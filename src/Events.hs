@@ -195,7 +195,7 @@ handleWSEvent we = do
                 editMessage p
                 cr <- use csCurrentChannelRef
                 let postCr = ServerChannel $ postChannelId p
-                when (postCr == cr) (updateViewed False)
+                when (postCr == cr) (updateViewed cr Nothing)
                 when (postCr /= cr) $
                     showChannelInSidebar postCr False
             | otherwise -> return ()
@@ -205,7 +205,7 @@ handleWSEvent we = do
                 deleteMessage p
                 cr <- use csCurrentChannelRef
                 let postCr = ServerChannel $ postChannelId p
-                when (postCr == cr) (updateViewed False)
+                when (postCr == cr) (updateViewed cr Nothing)
                 when (postCr /= cr) $
                     showChannelInSidebar postCr False
             | otherwise -> return ()
