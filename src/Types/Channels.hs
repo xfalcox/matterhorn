@@ -182,7 +182,7 @@ initialConversationChannelInfo chan pId =
                    , _cdType                   = _cdType $ _ccInfo chan
                    , _cdNotifyProps            = emptyChannelNotifyProps
                    , _cdTypingUsers            = noTypingUsers
-                   , _cdDMUserId               = Nothing
+                   , _cdDMUserId               = _cdDMUserId $ _ccInfo chan
                    , _cdSidebarShowOverride    = Nothing
                    }
 
