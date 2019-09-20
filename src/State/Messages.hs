@@ -329,7 +329,7 @@ addObtainedMessages cr reqCnt addTrailingGap posts =
         -- corpus, generating needed fetches of data associated with
         -- the post, and determining an notification action to be
         -- taken (if any).
-        action <- foldr andProcessWith noAction <$>
+        action <- foldr (<>) noAction <$>
           mapM (addMessageToState cr False False . OldPost)
                    [ (posts^.postsPostsL) HM.! p
                    | p <- toList (posts^.postsOrderL)
@@ -622,15 +622,15 @@ addMessageToState cr doFetchMentionedUsers fetchAuthor newPostData = do
                                    && wasMentioned                 -> notifyUser newPostData
                                | otherwise                         -> noAction
 
-                      return $ curChannelAction `andProcessWith` originUserAction
+                      return $ curChannelAction <> originUserAction
 
             doHandleAddedMessage
 
 -- | PostProcessMessageAdd is an internal value that informs the main
--- code whether the user should be notified (e.g., ring the bell) or
--- the server should be updated (e.g., that the channel has been
--- viewed).  This is a monoid so that it can be folded over when there
--- are multiple inbound posts to be processed.
+-- code whether the user should be notified (e.g., ring the bell) or the
+-- server should be updated (e.g., that the channel has been viewed).
+-- This is a semigroup so that it can be folded over when there are
+-- multiple inbound posts to be processed.
 data PostProcessMessageAdd =
     PostProcessMessageAdd { notifyUserPosts :: [PostToAdd]
                           , notifyServerChans :: [ChanRef]
@@ -645,9 +645,9 @@ updateServerViewed cr = PostProcessMessageAdd [] [cr]
 notifyUser :: PostToAdd -> PostProcessMessageAdd
 notifyUser a = PostProcessMessageAdd [a] []
 
-andProcessWith :: PostProcessMessageAdd -> PostProcessMessageAdd -> PostProcessMessageAdd
-andProcessWith (PostProcessMessageAdd ps1 cs1) (PostProcessMessageAdd ps2 cs2) =
-    PostProcessMessageAdd (nub $ ps1 <> ps2) (nub $ cs1 <> cs2)
+instance Semigroup PostProcessMessageAdd where
+    (PostProcessMessageAdd ps1 cs1) <> (PostProcessMessageAdd ps2 cs2) =
+        PostProcessMessageAdd (nub $ ps1 <> ps2) (nub $ cs1 <> cs2)
 
 -- | postProcessMessageAdd performs the actual actions indicated by
 -- the corresponding input value.
