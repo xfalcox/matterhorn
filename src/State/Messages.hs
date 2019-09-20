@@ -674,9 +674,8 @@ postProcessMessageAdd pp = do
     let ps = notifyUserPosts pp
         crs = notifyServerChans pp
 
-    when (not $ null crs) $ do
-        forM_ crs $ \cr ->
-            updateViewed cr Nothing
+    forM_ crs $ \cr ->
+        updateViewed cr Nothing
 
     when (not $ null ps) $ do
         maybeRingBell
