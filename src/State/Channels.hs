@@ -468,15 +468,17 @@ showChannelInSidebar cr setPending = do
                         _ -> return ()
 
                 Group -> do
-                    let cId = unServerChannel cr
-                    case groupChannelShowPreference prefs cId of
-                        Just False -> do
-                            let pref = showGroupChannelPref cId (me^.userIdL)
-                            when setPending $
-                                csPendingChannelChange .= Just (ChangeByChannelRef cr)
-                            doAsyncWith Preempt $ do
-                                MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
-                                return Nothing
+                    case cr of
+                        ServerChannel cId ->
+                            case groupChannelShowPreference prefs cId of
+                                Just False -> do
+                                    let pref = showGroupChannelPref cId (me^.userIdL)
+                                    when setPending $
+                                        csPendingChannelChange .= Just (ChangeByChannelRef cr)
+                                    doAsyncWith Preempt $ do
+                                        MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
+                                        return Nothing
+                                _ -> return ()
                         _ -> return ()
 
                 _ -> return ()

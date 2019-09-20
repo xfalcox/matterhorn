@@ -560,8 +560,14 @@ getGroupDMChannels :: UTCTime
                    -> [(Bool, T.Text, ChannelListEntry)]
 getGroupDMChannels now config prefs cs =
     let matches (_, info) = info^.ccInfo.cdType == Group &&
-                            groupChannelShouldAppear now config prefs info
-    in fmap (\(ServerChannel cId, ch) -> (hasUnread' ch, ch^.ccInfo.cdName, CLGroupDM cId)) $
+                            groupChannelShouldAppear now config prefs info &&
+                            isServerChannel (info^.ccInfo.cdChannelRef)
+        mkEntry (cr, ch) =
+            let e = case cr of
+                    ServerChannel cId -> CLGroupDM cId
+                    _ -> error $ "getGroupDMChannels should not get a " <> show cr
+            in (hasUnread' ch, ch^.ccInfo.cdName, e)
+    in fmap mkEntry $
        filteredChannels matches cs
 
 getDMChannels :: UTCTime
