@@ -286,50 +286,53 @@ renderConversationChannelHeader st hs chan parentChannelId =
     let parentChannelRef = ServerChannel parentChannelId
         Just parentChan = findChannelByRef parentChannelRef (st^.csChannels)
     in vBox [ txt $ "Conversation: " <> (chan^.ccInfo.cdName)
-            , (padRight (Pad 3) $ txt "In channel:") <+> (renderText' hs $ mkChannelName (parentChan^.ccInfo))
+            , (padRight (Pad 3) $ txt "In channel:") <+> (renderText' hs $ channelNameString st parentChan)
             ]
 
 renderServerChannelHeader :: ChatState -> HighlightSet -> ClientChannel -> Widget Name
 renderServerChannelHeader st hs chan =
-    let chnType = chan^.ccInfo.cdType
-        topicStr = chan^.ccInfo.cdHeader
-        userHeader u = let s = T.intercalate " " $ filter (not . T.null) parts
-                           parts = [ userSigil <> u^.uiName
-                                   , if (all T.null names)
-                                     then mempty
-                                     else "is"
-                                   ] <> names <> [
-                                     if T.null (u^.uiEmail)
-                                     then mempty
-                                     else "(" <> u^.uiEmail <> ")"
-                                   ]
-                           names = [ u^.uiFirstName
-                                   , nick
-                                   , u^.uiLastName
-                                   ]
-                           quote n = "\"" <> n <> "\""
-                           nick = maybe "" quote $ u^.uiNickName
-                       in s
+    let topicStr = chan^.ccInfo.cdHeader
         maybeTopic = if T.null topicStr
                      then ""
                      else " - " <> topicStr
-        channelNameString = case chnType of
-            Direct ->
-                case chan^.ccInfo.cdDMUserId >>= flip userById st of
-                    Nothing -> mkChannelName (chan^.ccInfo)
-                    Just u -> userHeader u
-            Private ->
-                mkChannelName (chan^.ccInfo) <> " (Private)"
-            Group ->
-                mkChannelName (chan^.ccInfo) <> " (Private group)"
-            _ ->
-                mkChannelName (chan^.ccInfo)
         newlineToSpace '\n' = ' '
         newlineToSpace c = c
-
     in renderText'
          hs
-         (T.map newlineToSpace (channelNameString <> maybeTopic))
+         (T.map newlineToSpace (channelNameString st chan <> maybeTopic))
+
+userHeader :: UserInfo -> T.Text
+userHeader u =
+    let s = T.intercalate " " $ filter (not . T.null) parts
+        parts = [ userSigil <> u^.uiName
+                , if (all T.null names)
+                  then mempty
+                  else "is"
+                ] <> names <> [
+                  if T.null (u^.uiEmail)
+                  then mempty
+                  else "(" <> u^.uiEmail <> ")"
+                ]
+        names = [ u^.uiFirstName
+                , nick
+                , u^.uiLastName
+                ]
+        quote n = "\"" <> n <> "\""
+        nick = maybe "" quote $ u^.uiNickName
+    in s
+
+channelNameString :: ChatState -> ClientChannel -> T.Text
+channelNameString st chan = case chan^.ccInfo.cdType of
+    Direct ->
+        case chan^.ccInfo.cdDMUserId >>= flip userById st of
+            Nothing -> mkChannelName (chan^.ccInfo)
+            Just u -> userHeader u
+    Private ->
+        mkChannelName (chan^.ccInfo) <> " (Private)"
+    Group ->
+        mkChannelName (chan^.ccInfo) <> " (Private group)"
+    _ ->
+        mkChannelName (chan^.ccInfo)
 
 shouldShowThreads :: ChanRef -> Bool
 shouldShowThreads (ConversationChannel {}) = False
