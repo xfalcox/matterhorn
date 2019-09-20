@@ -16,7 +16,6 @@ module State.Channels
   , nextUnreadChannel
   , nextUnreadUserOrChannel
   , createOrFocusDMChannel
-  , clearChannelUnreadStatus
   , prevChannel
   , nextChannel
   , recentChannel
