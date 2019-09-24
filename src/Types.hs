@@ -175,6 +175,10 @@ module Types
   , defaultUserPreferences
   , setUserPreferences
 
+  , FollowConversationPreference(..)
+  , followConversationPreferenceToPreference
+  , preferenceToFollowConversationChannelPreference
+
   , WebsocketAction(..)
 
   , Cmd(..)
@@ -447,6 +451,44 @@ data BackgroundInfo =
     -- ^ Show the indicator when the thread is working, but include the
     -- thread's work queue length.
     deriving (Eq, Show)
+
+data FollowConversationPreference =
+    FollowConversationPreference { fcpChannelId :: ChannelId
+                                 , fcpPostIds :: Set.Set PostId
+                                 , fcpUserId :: UserId
+                                 }
+
+followConversationPreferenceToPreference :: FollowConversationPreference
+                                         -> Preference
+followConversationPreferenceToPreference p =
+    let cId = fcpChannelId p
+        uId = fcpUserId p
+        pIds = F.toList $ fcpPostIds p
+        prefStr = T.intercalate "," $ idString <$> pIds
+    in Preference { preferenceUserId   = uId
+                  , preferenceCategory = followConversationPreferenceCategory
+                  , preferenceName     = PreferenceName $ idString cId
+                  , preferenceValue    = PreferenceValue prefStr
+                  }
+
+preferenceToFollowConversationChannelPreference :: Preference
+                                                -> Maybe FollowConversationPreference
+preferenceToFollowConversationChannelPreference p =
+    let uId = preferenceUserId p
+        isId t = T.length t == idLength
+        idLength = 32
+        cId = case preferenceName p of
+            PreferenceName t | isId t -> return $ CI $ Id t
+            _ -> Nothing
+        pIds = case T.splitOn "," $ fromRawPreferenceValue (preferenceValue p) of
+            vs | all isId vs -> return $ Set.fromList $ (PI . Id) <$> vs
+            _ -> Nothing
+    in if preferenceCategory p /= followConversationPreferenceCategory
+       then Nothing
+       else FollowConversationPreference <$> cId <*> pIds <*> pure uId
+
+followConversationPreferenceCategory :: PreferenceCategory
+followConversationPreferenceCategory = PreferenceCategoryOther "MH_FOLLOW_THREADS"
 
 data UserPreferences =
     UserPreferences { _userPrefShowJoinLeave     :: Bool
