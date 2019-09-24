@@ -476,7 +476,7 @@ preferenceToFollowConversationChannelPreference :: Preference
 preferenceToFollowConversationChannelPreference p =
     let uId = preferenceUserId p
         isId t = T.length t == idLength
-        idLength = 32
+        idLength = 26
         cId = case preferenceName p of
             PreferenceName t | isId t -> return $ CI $ Id t
             _ -> Nothing
