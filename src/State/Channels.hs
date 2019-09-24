@@ -43,6 +43,7 @@ module State.Channels
   , toggleChannelListVisibility
   , showChannelInSidebar
   , setConversationName
+  , updateConversationFollowPreference
   )
 where
 
@@ -268,6 +269,7 @@ refreshChannelsAndUsers = do
           handleNewUsers (Seq.fromList uIdsToFetch) $ do
               -- Then refresh all loaded channels
               forM_ chansWithData $ uncurry (refreshChannel SidebarUpdateDeferred)
+              updateChannelConversationsFromPrefs
               updateSidebar
 
 -- | Refresh information about a specific channel.  The channel
@@ -301,6 +303,39 @@ refreshChannel upd chan member = do
                 handleNewChannel False upd chan member
 
             updateChannelInfo cId chan member
+
+updateChannelConversationsFromPrefs :: MH ()
+updateChannelConversationsFromPrefs = do
+    -- Look at the user preferences and figure out which conversations
+    -- we should follow based on the set preferences.
+    session <- getSession
+    cs <- use csChannels
+    let allRefs = allChannelRefs cs
+        allCids = catMaybes $ getCid <$> allRefs
+        getCid (ServerChannel i) = Just i
+        getCid (ConversationChannel {}) = Nothing
+        isForOurChannel p = fcpChannelId p `elem` allCids
+
+    doAsyncWith Normal $ do
+        prefs <- MM.mmGetUsersPreferences UserMe session
+        let followPrefs = filter isForOurChannel $
+                          catMaybes $ F.toList $
+                          preferenceToFollowConversationChannelPreference <$> prefs
+        if null followPrefs
+           then return Nothing
+           else return $ Just $ do
+               forM_ followPrefs $ \p -> do
+                   let cId = fcpChannelId p
+                   mParentChan <- preuse (csChannel(ServerChannel cId))
+                   case mParentChan of
+                       Nothing -> return ()
+                       Just parentChan ->
+                           forM_ (F.toList $ fcpPostIds p) $ \pId -> do
+                               when (not $ isFollowingConversation cId pId cs) $ do
+                                   let cr = ConversationChannel cId pId
+                                   cChannel <- makeConversationChannel parentChan pId
+                                   csChannels %= addChannel cr cChannel
+               updateSidebar
 
 handleNewChannel :: Bool -> SidebarUpdate -> Channel -> ChannelMember -> MH ()
 handleNewChannel = handleNewChannel_ True
@@ -682,6 +717,11 @@ removeChannelFromState cr = do
                     setFocus $ ServerChannel cId
                     csRecentChannel .= Nothing
 
+            -- If the channel being removed is a conversation channel,
+            -- issue a call to the server to set a preference that we
+            -- are no longer following it.
+            updateConversationFollowPreference cr
+
             updateSidebar
 
         -- If the channel is a server channel, also remove any
@@ -720,6 +760,24 @@ nextUnreadUserOrChannel :: MH ()
 nextUnreadUserOrChannel = do
     st <- use id
     setFocusWith True (getNextUnreadUserOrChannel st)
+
+updateConversationFollowPreference :: ChanRef -> MH ()
+updateConversationFollowPreference cr = do
+    let cId = case cr of
+            ServerChannel i -> i
+            ConversationChannel i _ -> i
+
+    myId <- gets myUserId
+    chans <- use csChannels
+    session <- getSession
+
+    doAsync Normal $ do
+        let pref = followConversationPreferenceToPreference $
+                   FollowConversationPreference { fcpUserId = myId
+                                                , fcpChannelId = cId
+                                                , fcpPostIds = S.fromList $ getConversations cId chans
+                                                }
+        MM.mmSaveUsersPreferences UserMe (Seq.singleton pref) session
 
 leaveChannel :: ChanRef -> MH ()
 leaveChannel cr = leaveChannelIfPossible cr False

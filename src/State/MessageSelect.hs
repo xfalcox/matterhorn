@@ -82,6 +82,7 @@ followSelectedConversation = do
                       csChannels %= addChannel cr cChannel
                       updateSidebar
                       setFocus cr
+                      updateConversationFollowPreference cr
 
                   setMode Main
               ConversationChannel {} ->

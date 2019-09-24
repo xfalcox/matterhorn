@@ -18,7 +18,7 @@ module Types.Channels
   , unServerChannel
   , eesMultiline, eesInputHistoryPosition, eesLastInput
   , defaultEphemeralEditState
-  , followedThreads
+  , followedThreads, allChannelRefs
   -- * Lenses created for accessing ClientChannel fields
   , ccContents, ccInfo, ccEditState
   -- * Lenses created for accessing ChannelInfo fields
@@ -338,6 +338,9 @@ getChannelNameSet = _channelNameSet
 -- | Initial collection of Channels with no members
 noChannels :: ClientChannels
 noChannels = AllChannels HM.empty HM.empty HM.empty mempty
+
+allChannelRefs :: ClientChannels -> [ChanRef]
+allChannelRefs cs = HM.keys $ cs^.chanMap
 
 -- | Add a channel to the existing collection.
 addChannel :: ChanRef -> ClientChannel -> ClientChannels -> ClientChannels
