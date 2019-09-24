@@ -673,6 +673,15 @@ removeChannelFromState cr = do
             csChannels %= removeChannel cr
             -- Remove from focus zipper
             csFocus %= Z.filterZipper ((/= cr) . channelListEntryChannelRef)
+
+            -- If the channel being removed is the current channel and
+            -- is a conversation channel, make the sidebar's focused
+            -- channel after this deletion is its parent.
+            when (origFocus == cr) $
+                withConversationChannel cr $ \cId _ -> do
+                    setFocus $ ServerChannel cId
+                    csRecentChannel .= Nothing
+
             updateSidebar
 
         -- If the channel is a server channel, also remove any
