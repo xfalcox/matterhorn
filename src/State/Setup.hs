@@ -40,13 +40,14 @@ import qualified Zipper as Z
 
 
 incompleteCredentials :: Config -> ConnectionInfo
-incompleteCredentials config = ConnectionInfo hStr (configPort config) uStr pStr
+incompleteCredentials config = ConnectionInfo hStr (configPort config) uStr pStr mStr
     where
         hStr = maybe "" id $ configHost config
         uStr = maybe "" id $ configUser config
         pStr = case configPass config of
             Just (PasswordString s) -> s
             _                       -> ""
+        mStr = ""
 
 apiLogEventToLogMessage :: LogEvent -> IO LogMessage
 apiLogEventToLogMessage ev = do

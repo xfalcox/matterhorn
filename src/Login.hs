@@ -80,7 +80,7 @@ import           Markdown
 import           Themes ( clientEmphAttr )
 import           Types ( ConnectionInfo(..)
                        , ciPassword, ciUsername, ciHostname
-                       , ciPort, AuthenticationException(..)
+                       , ciPort, ciMFAToken, AuthenticationException(..)
                        , LogManager, LogCategory(..), ioLogWithManager
                        )
 
@@ -91,6 +91,7 @@ data Name =
     | Port
     | Username
     | Password
+    | MFAToken
     deriving (Ord, Eq, Show)
 
 -- | The result of an authentication attempt.
@@ -187,6 +188,7 @@ loginWorker setLogger logMgr unsafeUseHTTP requestChan respChan = forever $ do
                               else initConnectionData
                 login = Login { username = connInfo^.ciUsername
                               , password = connInfo^.ciPassword
+                              , mfatoken = connInfo^.ciMFAToken
                               }
 
             cd <- fmap setLogger $ connectFunc (connInfo^.ciHostname) (fromIntegral (connInfo^.ciPort)) poolCfg
@@ -293,6 +295,7 @@ mkState cInfo chan = state
         initialFocus = if | T.null (cInfo^.ciHostname) -> Hostname
                           | T.null (cInfo^.ciUsername) -> Username
                           | T.null (cInfo^.ciPassword) -> Password
+                          | T.null (cInfo^.ciMFAToken) -> MFAToken
                           | otherwise                  -> Hostname
 
 app :: App State LoginEvent Name
@@ -359,6 +362,8 @@ mkForm =
                    editTextField ciUsername Username (Just 1)
                , label "Password:" @@=
                    editPasswordField ciPassword Password
+               , label "MFA:" @@=
+                   editTextField ciMFAToken MFAToken (Just 1)
                ]
 
 editHostname :: (Show n, Ord n) => Lens' s Text -> n -> s -> FormFieldState s e n

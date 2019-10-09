@@ -42,6 +42,7 @@ module Types
   , ciPort
   , ciUsername
   , ciPassword
+  , ciMFAToken
   , Config(..)
   , HelpScreen(..)
   , PasswordSource(..)
@@ -646,6 +647,7 @@ data ConnectionInfo =
                    , _ciPort     :: Int
                    , _ciUsername :: Text
                    , _ciPassword :: Text
+                   , _ciMFAToken :: Text
                    }
 
 -- | We want to continue referring to posts by their IDs, but we don't

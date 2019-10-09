@@ -290,3 +290,4 @@ getCredentials config = do
                    <*> (pure $ configPort config)
                    <*> configUser config
                    <*> (pure passStr)
+                   <*> configUser config
